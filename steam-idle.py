@@ -83,20 +83,20 @@ def calc_delay(remainingDrops, playTime):
 
 def parse_badge(badge):
     try:
+        # Parse AppId
+        drop_info = badge.find('div', {'class': 'card_drop_info_dialog'}).attrs.get('id')
+        appid = int(re_AppId.match(drop_info).groups()[0])
+    except:
+        return (None, None, None)
+    if appid in BLACKLIST:
+        return (None, None, None)
+
+    try:
         # Parse remaining drops (will raise if there are none)
         progress = badge.find('span', {'class': 'progress_info_bold'}).get_text()
         remainingDrops = int(re_Drops.match(progress).groups()[0])
     except:
         remainingDrops = 0
-
-    try:
-        # Parse AppId
-        drop_info = badge.find('div', {'class': 'card_drop_info_dialog'}).attrs.get('id')
-        appid = int(re_AppId.match(drop_info).groups()[0])
-        if appid in BLACKLIST:
-            return (None, None, None)
-    except:
-        return (None, None, None)
 
     try:
         # Parse play time
