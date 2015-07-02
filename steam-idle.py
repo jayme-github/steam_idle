@@ -89,7 +89,7 @@ def parse_badge(badge):
         return (None, None, None)
     try:
         # Parse play time
-        playTime = float(re_PlayTime.search(badge.get_text().strip()).groups()[0])
+        playTime = float(re_PlayTime.search(badge.get_text()).groups()[0])
     except:
         playTime = 0.0
     return (appid, remainingDrops, playTime)
