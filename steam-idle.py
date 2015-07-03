@@ -15,7 +15,7 @@ from steam import SteamWebBrowser
 BLACKLIST = (368020, 335590)
 MAX_IDLE = 5 * 60 * 60 # Maximum idle time (avoid infinite loop)
 
-re_Drops = re.compile(ur'(\d+) card drops remaining')
+re_Drops = re.compile(ur'(\d+) card drop(?:s\b|\b) remaining')
 re_AppId = re.compile(ur'card_drop_info_gamebadge_(\d+)_')
 re_PlayTime = re.compile(ur'(\d+\.\d) hrs on record')
 
