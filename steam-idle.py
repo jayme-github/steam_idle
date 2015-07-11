@@ -9,7 +9,7 @@ from time import sleep
 from ctypes import CDLL
 import multiprocessing
 from bs4 import BeautifulSoup
-from datetime import timedelta
+from datetime import timedelta, datetime
 from steam import SteamWebBrowser
 
 BLACKLIST = (368020, 335590)
@@ -19,6 +19,9 @@ re_Drops = re.compile(ur'(\d+) card drop(?:s\b|\b) remaining')
 re_AppId = re.compile(ur'card_drop_info_gamebadge_(\d+)_')
 re_PlayTime = re.compile(ur'(\d+\.\d) hrs on record')
 
+swb = SteamWebBrowser()
+if not swb.logged_in():
+    swb.login()
 
 class Idle(multiprocessing.Process):
     def __init__(self, appid):
@@ -81,6 +84,9 @@ def calc_delay(remainingDrops, playTime):
     else:
         return baseDelay + (5 * 60) # Check every 5 minutes
 
+def strfsec(seconds):
+    return str(timedelta(seconds=seconds))
+
 def parse_badge(badge):
     try:
         # Parse AppId
@@ -105,8 +111,29 @@ def parse_badge(badge):
         playTime = 0.0
     return (appid, remainingDrops, playTime)
 
-def strfsec(seconds):
-    return str(timedelta(seconds=seconds))
+def parse_badges_page():
+    parsed_badges = []
+    currentPage = 1
+    badgePages = 1
+
+    while currentPage <= badgePages:
+        r = swb.get('https://steamcommunity.com/my/badges', params={'p': currentPage})
+        soup = BeautifulSoup(r.content)
+        if currentPage == 1:
+            try:
+                badgePages = int(soup.find_all('a', {'class': 'pagelink'})[-1].get_text())
+            except:
+                pass
+
+        for b in soup.find_all('div', {'class': 'badge_title_stats'}):
+            pbadge  = parse_badge(b)
+            if all(e != None for e in pbadge) and pbadge[1] > 0:
+                parsed_badges.append(pbadge)
+
+        currentPage += 1
+
+    return parsed_badges
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Idle all steam apps with card drops left.')
@@ -122,25 +149,7 @@ if __name__ == '__main__':
         pf.write(str(os.getpid()))
     atexit.register(os.unlink, pidfile)
 
-    swb = SteamWebBrowser()
-    if not swb.logged_in():
-        swb.login()
-
-    badges = []
-    r = swb.get('https://steamcommunity.com/my/badges')
-    soup = BeautifulSoup(r.content)
-    currentPage = 1
-    try:
-        badgePages = int(soup.find_all('a', {'class': 'pagelink'})[-1].get_text())
-    except:
-        badgePages = 1
-
-    while currentPage <= badgePages:
-        for badge in soup.find_all('div', {'class': 'badge_title_stats'}):
-            pbadge  = parse_badge(badge)
-            if all(e != None for e in pbadge) and pbadge[1] > 0:
-                badges.append(pbadge)
-        currentPage += 1
+    badges = parse_badges_page()
 
     print '%d games with a total of %d card drops left:' % (len(badges), sum([x[1] for x in badges]))
     if args.verbose:
@@ -153,19 +162,37 @@ if __name__ == '__main__':
         p.start()
         while remainingDrops > 0:
             delay = calc_delay(remainingDrops, playTime)
-            print '%d has %d remaining drops: Ideling for %s' % (appid, remainingDrops, strfsec(delay))
+            print '%d has %d remaining drops: Ideling for %s (\'till %s)' % (
+                    appid,
+                    remainingDrops,
+                    strfsec(delay),
+                    (datetime.now() + timedelta(seconds=delay)).strftime('%c')
+            )
             idletime += r_sleep(delay)
             if idletime >= MAX_IDLE:
                 break
             print 'Idled %s in total now...lets see what we got' % (strfsec(idletime),)
 
-            # Re check for remainingDrops
-            r = swb.get('https://steamcommunity.com/my/gamecards/%d' % appid)
-            soup = BeautifulSoup(r.content)
-            appid, remainingDrops, playTime = parse_badge(soup.find('div', {'class': 'badge_title_stats'}))
-            if not appid:
-                print 'ERROR: parse_badge returned no appid'
-                break
+            # Re check for remainingDrops and new apps
+            found_appid = False
+            for b in parse_badges_page():
+                if not filter(lambda x: x[0] == b[0], badges):
+                    badges.append(b)
+                    print 'Found a new app to idle: %d has %d remaining drops, play time till now: %0.1f hours' % (b[0], b[1], b[2])
+                    continue
+
+                if b[0] == appid:
+                    found_appid = True
+                    appid, remainingDrops, playTime = b
+            if not found_appid:
+                remainingDrops = 0
+
+            #r = swb.get('https://steamcommunity.com/my/gamecards/%d' % appid)
+            #soup = BeautifulSoup(r.content)
+            #appid, remainingDrops, playTime = parse_badge(soup.find('div', {'class': 'badge_title_stats'}))
+            #if not appid:
+            #    print 'ERROR: parse_badge returned no appid'
+            #    break
             print '%d drops remaining, playtime is %0.1f' %(remainingDrops, playTime)
 
         # Stop idleing
