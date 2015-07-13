@@ -132,12 +132,13 @@ def parse_badges_page():
 
         currentPage += 1
 
-    return parsed_badges
+    return sorted(parsed_badges, key=lambda x: x[2], reverse=True)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Idle all steam apps with card drops left.')
     parser.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
+    parser.add_argument('-l', '--list', help='don\'t idle, just list apps with card drops', action='store_true')
     args = parser.parse_args()
 
     # make sure this is only run once
@@ -152,9 +153,11 @@ if __name__ == '__main__':
     badges = parse_badges_page()
 
     print '%d games with a total of %d card drops left:' % (len(badges), sum([x[1] for x in badges]))
-    if args.verbose:
+    if args.verbose or args.list:
         for appid, remainingDrops, playTime in badges:
             print '%d has %d remaining drops, play time till now: %0.1f hours' % (appid, remainingDrops, playTime)
+    if args.list:
+        sys.exit(0)
 
     for appid, remainingDrops, playTime in badges:
         idletime = 0
