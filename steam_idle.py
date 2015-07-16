@@ -69,20 +69,32 @@ def r_sleep(sec):
     sleep(sec)
     return sec
 
+sameDelay = 0
+lastDelay = 5
 def calc_delay(remainingDrops, playTime):
     ''' Calculate the idle delay
         Minimum play time for cards to drop is 2 hours.
         Re-check every 15 mintes if there are more than 1 card drops remaining.
         If only one drop remains, check every 5 minutes
     '''
+    global sameDelay, lastDelay
     baseDelay = int((2.0 - playTime) * 60 * 60)
     if baseDelay < 0:
         baseDelay = 0
     
     if remainingDrops > 1:
+        # reset lastDelay for new appids
+        lastDelay = 5
+        sameDelay = 0
         return baseDelay + (15 * 60) # Check every 15 minutes
     else:
-        return baseDelay + (5 * 60) # Check every 5 minutes
+        # decrease delay by one minute every two calls
+        if lastDelay > 1:
+            if sameDelay == 2:
+                sameDelay = 0
+                lastDelay -= 1
+            sameDelay += 1
+        return baseDelay + (lastDelay * 60) # Check every 5 minutes
 
 def strfsec(seconds):
     return str(timedelta(seconds=seconds))
@@ -159,6 +171,7 @@ if __name__ == '__main__':
     if args.list:
         sys.exit(0)
 
+    # TODO: Run games < 2h playtime in parallel, then idle as normal
     for appid, remainingDrops, playTime in badges:
         idletime = 0
         p = Idle(appid)
