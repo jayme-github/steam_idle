@@ -10,6 +10,7 @@ from ctypes import CDLL
 import multiprocessing
 from bs4 import BeautifulSoup
 from datetime import timedelta, datetime
+from math import ceil
 from steam import SteamWebBrowser
 
 BLACKLIST = (368020, 335590)
@@ -147,6 +148,96 @@ def parse_badges_page():
     return sorted(parsed_badges, key=lambda x: x[2], reverse=True)
 
 
+def main_idle(badges):
+    global args
+
+    # Just to make sure it's ordered
+    badges = sorted(badges, key=lambda x: x[2], reverse=True)
+
+    # Idle all apps with playTime < 2h in parallel
+    processes = []
+    for appid, remainingDrops, playTime in filter(lambda x: x[2] < 2.0, badges):
+        delay = int((2.0 - playTime) * 60 * 60)
+        endtime = (datetime.now() + timedelta(seconds=delay))
+        p = Idle(appid)
+        p.start()
+        processes.append((endtime, p))
+
+    # should be ordered, shortest idle first
+    # TODO output and testing
+    print processes
+    for endtime, p in processes:
+        now = datetime.now()
+        if endtime < now:
+            print p, 'endtime (%s) is in the past, shutting down' % (endtime,)
+            p.shutdown()
+            p.join()
+            continue
+        diff = int(ceil((endtime - now).total_seconds()))
+        if diff <= 0:
+            print p, 'diff (%s) is below 0, shutting down' % (diff,)
+            p.shutdown()
+            p.join()
+            continue
+        print p, 'Sleeping for %s till %s' %(
+            strfsec(diff),
+            (datetime.now() + timedelta(seconds=diff)).strftime('%c')
+        )
+        sleep(diff)
+        print p, 'Woke up, shutting down'
+        p.shutdown()
+        p.join()
+
+    # All apps should be out of refund time, (playTime >= 2h), idle one by one
+    new_badges = [] # new apps added douring idle
+    for appid, remainingDrops, playTime in badges:
+        idletime = 0
+        p = Idle(appid)
+        p.start()
+        while remainingDrops > 0:
+            delay = calc_delay(remainingDrops, playTime)
+            print '%d has %d remaining drops: Ideling for %s (\'till %s)' % (
+                    appid,
+                    remainingDrops,
+                    strfsec(delay),
+                    (datetime.now() + timedelta(seconds=delay)).strftime('%c')
+            )
+            idletime += r_sleep(delay)
+            if idletime >= MAX_IDLE:
+                break
+
+            # Re check for remainingDrops and new apps
+            remainingDrops = 0 # Will be re-set if appid is still returned by parse_badges_page()
+            for b in parse_badges_page():
+                if not filter(lambda x: x[0] == b[0], badges):
+                    print 'Found a new app to idle: %d has %d remaining drops, play time till now: %0.1f hours' % (b[0], b[1], b[2])
+                    if b[2] >= 2.0:
+                        # Already out of refund time, add to the one by one idle list
+                        badges.append(b)
+                    else:
+                        # Needs "refund-idle"
+                        new_badges.append(b)
+                    continue
+
+                if b[0] == appid:
+                    # Still drops left for this app, continue idleing
+                    appid, remainingDrops, playTime = b
+            print '%d drops remaining, playtime is %0.1f' %(remainingDrops, playTime)
+
+        # Stop idleing
+        p.shutdown()
+        p.join()
+
+    if new_badges:
+        # We've found new apps that need "refund-idle"
+        print 'Found %d new apps that need "refund-idle":' %(len(new_badges),)
+        if args.verbose:
+            for appid, remainingDrops, playTime in new_badges:
+                print '%d has %d remaining drops, play time till now: %0.1f hours' % (appid, remainingDrops, playTime)
+        main_idle(new_badges)
+    
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Idle all steam apps with card drops left.')
     parser.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
@@ -171,47 +262,4 @@ if __name__ == '__main__':
     if args.list:
         sys.exit(0)
 
-    # TODO: Run games < 2h playtime in parallel, then idle as normal
-    for appid, remainingDrops, playTime in badges:
-        idletime = 0
-        p = Idle(appid)
-        p.start()
-        while remainingDrops > 0:
-            delay = calc_delay(remainingDrops, playTime)
-            print '%d has %d remaining drops: Ideling for %s (\'till %s)' % (
-                    appid,
-                    remainingDrops,
-                    strfsec(delay),
-                    (datetime.now() + timedelta(seconds=delay)).strftime('%c')
-            )
-            idletime += r_sleep(delay)
-            if idletime >= MAX_IDLE:
-                break
-            print 'Idled %s in total now...lets see what we got' % (strfsec(idletime),)
-
-            # Re check for remainingDrops and new apps
-            found_appid = False
-            for b in parse_badges_page():
-                if not filter(lambda x: x[0] == b[0], badges):
-                    badges.append(b)
-                    print 'Found a new app to idle: %d has %d remaining drops, play time till now: %0.1f hours' % (b[0], b[1], b[2])
-                    continue
-
-                if b[0] == appid:
-                    found_appid = True
-                    appid, remainingDrops, playTime = b
-            if not found_appid:
-                remainingDrops = 0
-
-            #r = swb.get('https://steamcommunity.com/my/gamecards/%d' % appid)
-            #soup = BeautifulSoup(r.content)
-            #appid, remainingDrops, playTime = parse_badge(soup.find('div', {'class': 'badge_title_stats'}))
-            #if not appid:
-            #    print 'ERROR: parse_badge returned no appid'
-            #    break
-            print '%d drops remaining, playtime is %0.1f' %(remainingDrops, playTime)
-
-        # Stop idleing
-        p.shutdown()
-        p.join()
-    
+    main_idle(badges)
