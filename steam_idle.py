@@ -11,7 +11,7 @@ import multiprocessing
 from bs4 import BeautifulSoup
 from datetime import timedelta, datetime
 from math import ceil
-from steam import SteamWebBrowser
+from steamweb import SteamWebBrowser
 
 BLACKLIST = (368020, 335590)
 MAX_IDLE = 5 * 60 * 60 # Maximum idle time (avoid infinite loop)
@@ -28,6 +28,7 @@ class Idle(multiprocessing.Process):
     def __init__(self, appid):
         super(Idle, self).__init__()
         self.appid = int(appid)
+        self.name += '-[%s]' % str(self.appid)
         self.exit = multiprocessing.Event()
 
     def run(self):
@@ -131,7 +132,7 @@ def parse_badges_page():
 
     while currentPage <= badgePages:
         r = swb.get('https://steamcommunity.com/my/badges', params={'p': currentPage})
-        soup = BeautifulSoup(r.content)
+        soup = BeautifulSoup(r.content, 'html.parser')
         if currentPage == 1:
             try:
                 badgePages = int(soup.find_all('a', {'class': 'pagelink'})[-1].get_text())
