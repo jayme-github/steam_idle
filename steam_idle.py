@@ -155,39 +155,40 @@ def main_idle(badges):
     # Just to make sure it's ordered
     badges = sorted(badges, key=lambda x: x[2], reverse=True)
 
-    # Idle all apps with playTime < 2h in parallel
-    processes = []
-    for appid, remainingDrops, playTime in filter(lambda x: x[2] < 2.0, badges):
-        delay = int((2.0 - playTime) * 60 * 60)
-        endtime = (datetime.now() + timedelta(seconds=delay))
-        p = Idle(appid)
-        p.start()
-        processes.append((endtime, p))
+    if not args.skip_multi:
+        # Idle all apps with playTime < 2h in parallel
+        processes = []
+        for appid, remainingDrops, playTime in filter(lambda x: x[2] < 2.0, badges):
+            delay = int((2.0 - playTime) * 60 * 60)
+            endtime = (datetime.now() + timedelta(seconds=delay))
+            p = Idle(appid)
+            p.start()
+            processes.append((endtime, p))
 
-    # should be ordered, shortest idle first
-    # TODO output and testing
-    print processes
-    for endtime, p in processes:
-        now = datetime.now()
-        if endtime < now:
-            print p, 'endtime (%s) is in the past, shutting down' % (endtime,)
+        # should be ordered, shortest idle first
+        # TODO output and testing
+        print processes
+        for endtime, p in processes:
+            now = datetime.now()
+            if endtime < now:
+                print p, 'endtime (%s) is in the past, shutting down' % (endtime,)
+                p.shutdown()
+                p.join()
+                continue
+            diff = int(ceil((endtime - now).total_seconds()))
+            if diff <= 0:
+                print p, 'diff (%s) is below 0, shutting down' % (diff,)
+                p.shutdown()
+                p.join()
+                continue
+            print p, 'Sleeping for %s till %s' %(
+                strfsec(diff),
+                (datetime.now() + timedelta(seconds=diff)).strftime('%c')
+            )
+            sleep(diff)
+            print p, 'Woke up, shutting down'
             p.shutdown()
             p.join()
-            continue
-        diff = int(ceil((endtime - now).total_seconds()))
-        if diff <= 0:
-            print p, 'diff (%s) is below 0, shutting down' % (diff,)
-            p.shutdown()
-            p.join()
-            continue
-        print p, 'Sleeping for %s till %s' %(
-            strfsec(diff),
-            (datetime.now() + timedelta(seconds=diff)).strftime('%c')
-        )
-        sleep(diff)
-        print p, 'Woke up, shutting down'
-        p.shutdown()
-        p.join()
 
     # All apps should be out of refund time, (playTime >= 2h), idle one by one
     new_badges = [] # new apps added douring idle
@@ -243,6 +244,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Idle all steam apps with card drops left.')
     parser.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
     parser.add_argument('-l', '--list', help='don\'t idle, just list apps with card drops', action='store_true')
+    parser.add_argument('--skip-multi', help='don\'t multi-idle all apps with playtime < 2h first', action='store_true')
     args = parser.parse_args()
 
     # make sure this is only run once
