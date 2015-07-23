@@ -245,7 +245,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # make sure this is only run once
-    pidfile = '/tmp/steam-idle.pid'
+    pidfile = os.path.join(os.path.dirname(__file__), 'steam-idle.pid')
     if os.path.isfile(pidfile):
         print 'already running ("%s")' % pidfile
         sys.exit(1)
