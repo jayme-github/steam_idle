@@ -36,10 +36,12 @@ class Idle(multiprocessing.Process):
         p = multiprocessing.current_process()
         me = '%s(%d):' % (p.name, p.pid)
         
-        # redirect stderr from steam api
+        # redirect stdout and stderr from steam api
         devnull = os.open(os.devnull, 777)
         self.old_stderr = os.dup(2)
+        self.old_stdout = os.dup(1)
         os.dup2(devnull, 2)
+        os.dup2(devnull, 1)
         steam_api = CDLL('/usr/local/lib/libsteam_api64.so')
         try:
             steam_api.SteamAPI_Init()
@@ -60,8 +62,9 @@ class Idle(multiprocessing.Process):
 
         # Shutsdown steam api
         steam_api.SteamAPI_Shutdown()
-        # restore stderr
+        # restore stdout and stderr
         os.dup2(self.old_stderr, 2)
+        os.dup2(self.old_stdout, 1)
 
     def shutdown(self):
         self.exit.set()
