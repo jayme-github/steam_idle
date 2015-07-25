@@ -163,15 +163,15 @@ def parse_badges_page():
     return sorted(parsed_badges, key=lambda x: x[2], reverse=True)
 
 
-def main_idle(badges):
+def main_idle(apps):
     global args
 
     # Just to make sure it's ordered
-    badges = sorted(badges, key=lambda x: x[2], reverse=True)
+    apps = sorted(apps, key=lambda x: x[2], reverse=True)
     if not args.skip_multi:
         # Idle all apps with playTime < 2h in parallel
         processes = []
-        for appid, remainingDrops, playTime in filter(lambda x: x[2] < 2.0, badges):
+        for appid, remainingDrops, playTime in filter(lambda x: x[2] < 2.0, apps):
             delay = int((2.0 - playTime) * 60 * 60)
             endtime = (datetime.now() + timedelta(seconds=delay))
             p = Idle(appid)
@@ -206,17 +206,17 @@ def main_idle(badges):
 
         if processes:
             # Multi-Ideled some apps, update values as they will have changed
-            badges = parse_badges_page()
+            apps = parse_badges_page()
             # If there are still apps with < 2.0h play time, restart
-            if [x for x in badges if x[2] < 2.0]:
+            if [x for x in apps if x[2] < 2.0]:
                 print 'There are still apps within refund time, restarting multi-idle'
-                return main_idle(badges)
+                return main_idle(apps)
 
     # All apps should be out of refund time, (playTime >= 2h), idle one by one
     if args.verbose:
-        print 'Startin sequential idle of %d apps' % len(badges)
-    new_badges = [] # new apps added douring idle
-    for appid, remainingDrops, playTime in badges:
+        print 'Startin sequential idle of %d apps' % len(apps)
+    new_apps = [] # new apps added douring idle
+    for appid, remainingDrops, playTime in apps:
         idletime = 0
         p = Idle(appid)
         p.start()
@@ -234,33 +234,33 @@ def main_idle(badges):
 
             # Re check for remainingDrops and new apps
             remainingDrops = 0 # Will be re-set if appid is still returned by parse_badges_page()
-            for b in parse_badges_page():
-                if not filter(lambda x: x[0] == b[0], badges):
-                    print 'Found a new app to idle: %d has %d remaining drops, play time till now: %0.1f hours' % (b[0], b[1], b[2])
-                    if b[2] >= 2.0:
+            for a in parse_badges_page():
+                if not filter(lambda x: x[0] == a[0], apps):
+                    print 'Found a new app to idle: %d has %d remaining drops, play time till now: %0.1f hours' % (a[0], a[1], a[2])
+                    if a[2] >= 2.0:
                         # Already out of refund time, add to the one by one idle list
-                        badges.append(b)
+                        apps.append(a)
                     else:
                         # Needs "refund-idle"
-                        new_badges.append(b)
+                        new_apps.append(a)
                     continue
 
-                if b[0] == appid:
+                if a[0] == appid:
                     # Still drops left for this app, continue idleing
-                    appid, remainingDrops, playTime = b
+                    appid, remainingDrops, playTime = a
             print '%d drops remaining, playtime is %0.1f' %(remainingDrops, playTime)
 
         # Stop idleing
         p.shutdown()
         p.join()
 
-    if new_badges:
+    if new_apps:
         # We've found new apps that need "refund-idle"
-        print 'Found %d new apps that need "refund-idle":' %(len(new_badges),)
+        print 'Found %d new apps that need "refund-idle":' %(len(new_apps),)
         if args.verbose:
-            for appid, remainingDrops, playTime in new_badges:
+            for appid, remainingDrops, playTime in new_apps:
                 print '%d has %d remaining drops, play time till now: %0.1f hours' % (appid, remainingDrops, playTime)
-        return main_idle(new_badges)
+        return main_idle(new_apps)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Idle all steam apps with card drops left.')
@@ -278,13 +278,13 @@ if __name__ == '__main__':
         pf.write(str(os.getpid()))
     atexit.register(os.unlink, pidfile)
 
-    badges = parse_badges_page()
+    apps = parse_badges_page()
 
-    print '%d games with a total of %d card drops left:' % (len(badges), sum([x[1] for x in badges]))
+    print '%d games with a total of %d card drops left:' % (len(apps), sum([x[1] for x in apps]))
     if args.verbose or args.list:
-        for appid, remainingDrops, playTime in badges:
+        for appid, remainingDrops, playTime in apps:
             print '%d has %d remaining drops, play time till now: %0.1f hours' % (appid, remainingDrops, playTime)
     if args.list:
         sys.exit(0)
 
-    main_idle(badges)
+    main_idle(apps)
