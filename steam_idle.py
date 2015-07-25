@@ -24,6 +24,24 @@ swb = SteamWebBrowser()
 if not swb.logged_in():
     swb.login()
 
+def get_steam_api():
+    try:
+        if sys.platform.startswith('win'):
+            so = 'steam_api.dll'
+        elif sys.platform.startswith('darwin'):
+            so = 'libsteam_api.dylib'
+        elif sys.platform.startswith('linux'):
+            if sys.maxsize > 2**32:
+                so = 'libsteam_api_64.so'
+            else:
+                so = 'libsteam_api.so'
+        else:
+            raise EnvironmentError('Unsupported operating system')
+        steam_api = CDLL(os.path.join('libs', so))
+    except Exception as e:
+        print 'Not loading Steam library: {}'.format(e)
+    return steam_api
+
 class Idle(multiprocessing.Process):
     def __init__(self, appid):
         super(Idle, self).__init__()
@@ -37,7 +55,7 @@ class Idle(multiprocessing.Process):
         me = '%s(%d):' % (p.name, p.pid)
         
         self.redirect_streams()
-        steam_api = CDLL('/usr/local/lib/libsteam_api64.so')
+        steam_api = get_steam_api()
         try:
             steam_api.SteamAPI_Init()
             self.restore_streams()
