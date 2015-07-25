@@ -41,3 +41,4 @@ config.cfg
 *.html
 *.swp
 .venv
+steam-idle.pid
