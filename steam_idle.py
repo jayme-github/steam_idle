@@ -36,16 +36,13 @@ class Idle(multiprocessing.Process):
         p = multiprocessing.current_process()
         me = '%s(%d):' % (p.name, p.pid)
         
-        # redirect stdout and stderr from steam api
-        devnull = os.open(os.devnull, 777)
-        self.old_stderr = os.dup(2)
-        self.old_stdout = os.dup(1)
-        os.dup2(devnull, 2)
-        os.dup2(devnull, 1)
+        self.redirect_streams()
         steam_api = CDLL('/usr/local/lib/libsteam_api64.so')
         try:
             steam_api.SteamAPI_Init()
+            self.restore_streams()
         except:
+            self.restore_streams()
             print me, "Couldn't initialize Steam API" 
             sys.stdout.flush()
             return
@@ -62,12 +59,22 @@ class Idle(multiprocessing.Process):
 
         # Shutsdown steam api
         steam_api.SteamAPI_Shutdown()
-        # restore stdout and stderr
-        os.dup2(self.old_stderr, 2)
-        os.dup2(self.old_stdout, 1)
 
     def shutdown(self):
         self.exit.set()
+
+    def redirect_streams(self):
+        # redirect stdout and stderr from steam api
+        devnull = os.open(os.devnull, 777)
+        self.old_stderr = os.dup(2)
+        self.old_stdout = os.dup(1)
+        os.dup2(devnull, 2)
+        os.dup2(devnull, 1)
+
+    def restore_streams(self):
+        # restore stdout and stderr
+        os.dup2(self.old_stderr, 2)
+        os.dup2(self.old_stdout, 1)
 
 def r_sleep(sec):
     ''' Sleep sec seconds and return seconds slept '''
@@ -86,12 +93,16 @@ def calc_delay(remainingDrops, playTime):
     baseDelay = int((2.0 - playTime) * 60 * 60)
     if baseDelay < 0:
         baseDelay = 0
-    
+
+    # Reset lastDelay for new appids
     if remainingDrops > 1:
-        # reset lastDelay for new appids
         lastDelay = 5
         sameDelay = 0
+
+    if remainingDrops > 2:
         return baseDelay + (15 * 60) # Check every 15 minutes
+    elif remainingDrops == 2:
+        return baseDelay + (10 * 60) # Check every 10 minutes
     else:
         # decrease delay by one minute every two calls
         if lastDelay > 1:
@@ -157,7 +168,6 @@ def main_idle(badges):
 
     # Just to make sure it's ordered
     badges = sorted(badges, key=lambda x: x[2], reverse=True)
-
     if not args.skip_multi:
         # Idle all apps with playTime < 2h in parallel
         processes = []
@@ -167,10 +177,10 @@ def main_idle(badges):
             p = Idle(appid)
             p.start()
             processes.append((endtime, p))
+        if args.verbose:
+            print 'Multi-Ideling %d apps' % len(processes)
 
-        # should be ordered, shortest idle first
-        # TODO output and testing
-        print processes
+        # Should be ordered, shortest idle first
         for endtime, p in processes:
             now = datetime.now()
             if endtime < now:
@@ -189,11 +199,22 @@ def main_idle(badges):
                 (datetime.now() + timedelta(seconds=diff)).strftime('%c')
             )
             sleep(diff)
-            print p, 'Woke up, shutting down'
+            if args.verbose:
+                print p, 'Woke up, shutting down'
             p.shutdown()
             p.join()
 
+        if processes:
+            # Multi-Ideled some apps, update values as they will have changed
+            badges = parse_badges_page()
+            # If there are still apps with < 2.0h play time, restart
+            if [x for x in badges if x[2] < 2.0]:
+                print 'There are still apps within refund time, restarting multi-idle'
+                return main_idle(badges)
+
     # All apps should be out of refund time, (playTime >= 2h), idle one by one
+    if args.verbose:
+        print 'Startin sequential idle of %d apps' % len(badges)
     new_badges = [] # new apps added douring idle
     for appid, remainingDrops, playTime in badges:
         idletime = 0
@@ -239,9 +260,7 @@ def main_idle(badges):
         if args.verbose:
             for appid, remainingDrops, playTime in new_badges:
                 print '%d has %d remaining drops, play time till now: %0.1f hours' % (appid, remainingDrops, playTime)
-        main_idle(new_badges)
-    
-
+        return main_idle(new_badges)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Idle all steam apps with card drops left.')
