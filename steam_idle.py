@@ -235,7 +235,7 @@ def main_idle(apps):
                 p.shutdown()
                 p.join()
                 continue
-            print p, 'Sleeping for %s till %s' %(
+            print 'Sleeping for %s till %s' %(
                 strfsec(diff),
                 (datetime.now() + timedelta(seconds=diff)).strftime('%c')
             )
