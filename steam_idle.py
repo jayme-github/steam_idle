@@ -158,11 +158,18 @@ def parse_badge(badge):
     return (appid, remainingDrops, playTime)
 
 def parse_badges_page():
+    ''' Parses badges (using parse_badge()) on all badges pages
+    If specific appid's are given on the command line, only those are returned.
+    '''
+    global args
     parsed_badges = []
     currentPage = 1
     badgePages = 1
 
-    while currentPage <= badgePages:
+    # args.appid is None if no appids where provided on command line
+    argv_appids = list(args.appid) if args.appid else list()
+
+    while currentPage <= badgePages and (args.appid == None or len(argv_appids) > 0):
         r = swb.get('https://steamcommunity.com/my/badges', params={'p': currentPage})
         soup = BeautifulSoup(r.content, 'html.parser')
         if currentPage == 1:
@@ -172,9 +179,25 @@ def parse_badges_page():
                 pass
 
         for b in soup.find_all('div', {'class': 'badge_title_stats'}):
-            pbadge  = parse_badge(b)
+            pbadge = parse_badge(b)
+            # Ensure all no value is None and there are drops remaining
             if all(e != None for e in pbadge) and pbadge[1] > 0:
+                if args.appid != None:
+                    # appid's are given on the command line
+                    if pbadge[0] in argv_appids:
+                        # This appid was given on the command line
+                        argv_appids.remove(pbadge[0])
+                    else:
+                        # This appid was NOT given on the command line
+                        # don't include it in the returned list
+                        continue
+
+                # Append app info to the list of parsed badges
                 parsed_badges.append(pbadge)
+
+                if args.appid != None and len(argv_appids) == 0:
+                    # appid's are given on the command line and all of them where found already
+                    break
 
         currentPage += 1
 
@@ -253,7 +276,7 @@ def main_idle(apps):
             # Re check for remainingDrops and new apps
             remainingDrops = 0 # Will be re-set if appid is still returned by parse_badges_page()
             for a in parse_badges_page():
-                if not filter(lambda x: x[0] == a[0], apps):
+                if not filter(lambda x: x[0] == a[0], apps + new_apps):
                     print 'Found a new app to idle: %d has %d remaining drops, play time till now: %0.1f hours' % (a[0], a[1], a[2])
                     if a[2] >= 2.0:
                         # Already out of refund time, add to the one by one idle list
@@ -285,6 +308,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
     parser.add_argument('-l', '--list', help='don\'t idle, just list apps with card drops', action='store_true')
     parser.add_argument('--skip-multi', help='don\'t multi-idle all apps with playtime < 2h first', action='store_true')
+    parser.add_argument('-a', '--appid', help='idle only specific app ID\'s', type=int, nargs='*')
     args = parser.parse_args()
 
     # make sure this is only run once
