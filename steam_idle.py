@@ -11,6 +11,7 @@ import multiprocessing
 from bs4 import BeautifulSoup
 from datetime import timedelta, datetime
 from math import ceil
+from tempfile import TemporaryFile
 from steamweb import SteamWebBrowser
 
 BLACKLIST = (368020, 335590)
@@ -50,7 +51,7 @@ class Idle(multiprocessing.Process):
         self.exit = multiprocessing.Event()
 
     def run(self):
-        os.environ["SteamAppId"] = str(self.appid)
+        os.environ['SteamAppId'] = str(self.appid)
         p = multiprocessing.current_process()
         me = '%s(%d):' % (p.name, p.pid)
         
@@ -82,17 +83,17 @@ class Idle(multiprocessing.Process):
         self.exit.set()
 
     def redirect_streams(self):
-        # redirect stdout and stderr from steam api
+        # redirect stdout and stderr of steam api
         devnull = os.open(os.devnull, 777)
-        self.old_stderr = os.dup(2)
         self.old_stdout = os.dup(1)
-        os.dup2(devnull, 2)
+        self.old_stderr = os.dup(2)
         os.dup2(devnull, 1)
+        os.dup2(devnull, 2)
 
     def restore_streams(self):
         # restore stdout and stderr
-        os.dup2(self.old_stderr, 2)
         os.dup2(self.old_stdout, 1)
+        os.dup2(self.old_stderr, 2)
 
 def r_sleep(sec):
     ''' Sleep sec seconds and return seconds slept '''
@@ -303,6 +304,34 @@ def main_idle(apps):
                 print '%d has %d remaining drops, play time till now: %0.1f hours' % (appid, remainingDrops, playTime)
         return main_idle(new_apps)
 
+
+def is_steam_running(result_queue):
+    ''' Check if steam is running
+    '''
+    # redirect stdout and stderr of steam api
+    tfile = TemporaryFile(mode='w+b')
+    old_stdout = os.dup(1)
+    old_stderr = os.dup(2)
+    os.dup2(tfile.fileno(), 1)
+    os.dup2(tfile.fileno(), 2)
+
+    os.environ['SteamAppId'] = '480'
+    steam_api = get_steam_api()
+    steam_running = False if steam_api.SteamAPI_Init() == 0 else True
+    steam_api.SteamAPI_Shutdown()
+
+    # restore stdout and stderr
+    os.dup2(old_stdout, 1)
+    os.dup2(old_stderr, 2)
+
+    # print output if steam is not running
+    output = []
+    if not steam_running:
+        tfile.seek(0, 0)
+        output = [line.strip() for line in tfile.readlines()]
+    result_queue.put((steam_running, output))
+    tfile.close()
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Idle all steam apps with card drops left.')
     parser.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
@@ -319,6 +348,21 @@ if __name__ == '__main__':
     with open(pidfile, 'w') as pf:
         pf.write(str(os.getpid()))
     atexit.register(os.unlink, pidfile)
+
+    if not args.list:
+        # Check if Steam is running
+        result_queue = multiprocessing.Queue()
+        p = multiprocessing.Process(target=is_steam_running, args=(result_queue,))
+        p.start()
+        p.join()
+        steam_running, steam_out = result_queue.get()
+        del(result_queue)
+        del(p)
+        if not steam_running:
+            for line in steam_out:
+                print line
+            print 'Could not find a running Steam instance!'
+            sys.exit(1)
 
     apps = parse_badges_page()
 
