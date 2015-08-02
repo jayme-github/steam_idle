@@ -340,16 +340,16 @@ if __name__ == '__main__':
     parser.add_argument('-a', '--appid', help='idle only specific app ID\'s', type=int, nargs='*')
     args = parser.parse_args()
 
-    # make sure this is only run once
-    pidfile = os.path.join(os.path.dirname(__file__), 'steam-idle.pid')
-    if os.path.isfile(pidfile):
-        print 'already running ("%s")' % pidfile
-        sys.exit(1)
-    with open(pidfile, 'w') as pf:
-        pf.write(str(os.getpid()))
-    atexit.register(os.unlink, pidfile)
-
     if not args.list:
+        # make sure this is only run once
+        pidfile = os.path.join(os.path.dirname(__file__), 'steam-idle.pid')
+        if os.path.isfile(pidfile):
+            print 'already running ("%s")' % pidfile
+            sys.exit(1)
+        with open(pidfile, 'w') as pf:
+            pf.write(str(os.getpid()))
+        atexit.register(os.unlink, pidfile)
+
         # Check if Steam is running
         result_queue = multiprocessing.Queue()
         p = multiprocessing.Process(target=is_steam_running, args=(result_queue,))
