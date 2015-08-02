@@ -324,7 +324,7 @@ def is_steam_running(result_queue):
     os.dup2(old_stdout, 1)
     os.dup2(old_stderr, 2)
 
-    # print output if steam is not running
+    # return output if steam is not running
     output = []
     if not steam_running:
         tfile.seek(0, 0)
