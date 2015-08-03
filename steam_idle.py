@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 from datetime import timedelta, datetime
 from math import ceil
 from tempfile import TemporaryFile
-from steamweb import SteamWebBrowser
+from steamweb import SteamWebBrowserCfg as SteamWebBrowser
 
 BLACKLIST = (368020, 335590)
 MAX_IDLE = 5 * 60 * 60 # Maximum idle time (avoid infinite loop)
