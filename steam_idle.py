@@ -6,7 +6,7 @@ import sys
 import argparse
 import atexit
 from time import sleep
-from ctypes import CDLL
+from ctypes import CDLL, c_bool, c_void_p
 import multiprocessing
 from bs4 import BeautifulSoup
 from datetime import timedelta, datetime
@@ -38,6 +38,9 @@ def get_steam_api():
         else:
             raise EnvironmentError('Unsupported operating system')
         steam_api = CDLL(os.path.join('libs', so))
+        steam_api.SteamAPI_IsSteamRunning.restype = c_bool
+        steam_api.SteamAPI_Init.restype = c_bool
+        steam_api.SteamAPI_Shutdown.restype = c_void_p
     except Exception as e:
         print 'Not loading Steam library: {}'.format(e)
     return steam_api
@@ -308,7 +311,7 @@ def is_steam_running():
     ''' Check if steam is running
     '''
     api = get_steam_api()
-    running = False if api.SteamAPI_IsSteamRunning() == 0 else True
+    running = api.SteamAPI_IsSteamRunning()
     api.SteamAPI_Shutdown()
     return running
 
