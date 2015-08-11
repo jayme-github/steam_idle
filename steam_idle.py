@@ -11,7 +11,6 @@ import multiprocessing
 from bs4 import BeautifulSoup
 from datetime import timedelta, datetime
 from math import ceil
-from tempfile import TemporaryFile
 from steamweb import SteamWebBrowserCfg as SteamWebBrowser
 
 BLACKLIST = (368020, 335590)
@@ -305,32 +304,13 @@ def main_idle(apps):
         return main_idle(new_apps)
 
 
-def is_steam_running(result_queue):
+def is_steam_running():
     ''' Check if steam is running
     '''
-    # redirect stdout and stderr of steam api
-    tfile = TemporaryFile(mode='w+b')
-    old_stdout = os.dup(1)
-    old_stderr = os.dup(2)
-    os.dup2(tfile.fileno(), 1)
-    os.dup2(tfile.fileno(), 2)
-
-    os.environ['SteamAppId'] = '480'
-    steam_api = get_steam_api()
-    steam_running = False if steam_api.SteamAPI_Init() == 0 else True
-    steam_api.SteamAPI_Shutdown()
-
-    # restore stdout and stderr
-    os.dup2(old_stdout, 1)
-    os.dup2(old_stderr, 2)
-
-    # return output if steam is not running
-    output = []
-    if not steam_running:
-        tfile.seek(0, 0)
-        output = [line.strip() for line in tfile.readlines()]
-    result_queue.put((steam_running, output))
-    tfile.close()
+    api = get_steam_api()
+    running = False if api.SteamAPI_IsSteamRunning() == 0 else True
+    api.SteamAPI_Shutdown()
+    return running
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Idle all steam apps with card drops left.')
@@ -351,17 +331,9 @@ if __name__ == '__main__':
         atexit.register(os.unlink, pidfile)
 
         # Check if Steam is running
-        result_queue = multiprocessing.Queue()
-        p = multiprocessing.Process(target=is_steam_running, args=(result_queue,))
-        p.start()
-        p.join()
-        steam_running, steam_out = result_queue.get()
-        del(result_queue)
-        del(p)
-        if not steam_running:
-            for line in steam_out:
-                print line
+        if not is_steam_running():
             print 'Could not find a running Steam instance!'
+            print 'Please start your Steam Client.'
             sys.exit(1)
 
     apps = parse_badges_page()
