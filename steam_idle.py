@@ -172,8 +172,18 @@ def parse_badges_page():
     # args.appid is None if no appids where provided on command line
     argv_appids = list(args.appid) if args.appid else list()
 
+    retry = False
     while currentPage <= badgePages and (args.appid == None or len(argv_appids) > 0):
         r = swb.get('https://steamcommunity.com/my/badges', params={'p': currentPage})
+        if r.status_code == 302:
+            if retry:
+                # We already tries to force a login
+                raise Exception('Unable to fetch badges')
+            # Looks like we've been redirected. Force a login and retry
+            swb.login()
+            retry = True
+            continue
+
         soup = BeautifulSoup(r.content, 'html.parser')
         if currentPage == 1:
             try:
