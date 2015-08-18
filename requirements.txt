@@ -1,2 +1,2 @@
 beautifulsoup4>=4.4.0
-steamweb>=0.1
+-e git+https://github.com/jayme-github/steamweb.git#egg=steamweb
