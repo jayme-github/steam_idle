@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+from __future__ import print_function
 import os
 import re
 import sys
@@ -16,9 +16,9 @@ from steamweb import SteamWebBrowserCfg as SteamWebBrowser
 BLACKLIST = (368020, 335590)
 MAX_IDLE = 5 * 60 * 60 # Maximum idle time (avoid infinite loop)
 
-re_Drops = re.compile(ur'(\d+) card drop(?:s\b|\b) remaining')
-re_AppId = re.compile(ur'card_drop_info_gamebadge_(\d+)_')
-re_PlayTime = re.compile(ur'(\d+\.\d) hrs on record')
+re_Drops = re.compile(r'(\d+) card drop(?:s\b|\b) remaining')
+re_AppId = re.compile(r'card_drop_info_gamebadge_(\d+)_')
+re_PlayTime = re.compile(r'(\d+\.\d) hrs on record')
 
 swb = SteamWebBrowser()
 if not swb.logged_in():
@@ -42,7 +42,7 @@ def get_steam_api():
         steam_api.SteamAPI_Init.restype = c_bool
         steam_api.SteamAPI_Shutdown.restype = c_void_p
     except Exception as e:
-        print 'Not loading Steam library: {}'.format(e)
+        print('Not loading Steam library: {}'.format(e))
     return steam_api
 
 class Idle(multiprocessing.Process):
@@ -64,18 +64,18 @@ class Idle(multiprocessing.Process):
             self.restore_streams()
         except:
             self.restore_streams()
-            print me, "Couldn't initialize Steam API" 
+            print(me, "Couldn't initialize Steam API") 
             sys.stdout.flush()
             return
 
-        print me, 'Ideling appid %d' % (self.appid,)
+        print(me, 'Ideling appid %d' % (self.appid,))
         sys.stdout.flush()
 
         while not self.exit.is_set():
             sys.stdout.flush()
             sleep(1)
         
-        print me, 'shutting down'
+        print(me, 'shutting down')
         sys.stdout.flush()
 
         # Shutsdown steam api
@@ -225,36 +225,36 @@ def main_idle(apps):
     if not args.skip_multi:
         # Idle all apps with playTime < 2h in parallel
         processes = []
-        for appid, remainingDrops, playTime in filter(lambda x: x[2] < 2.0, apps):
+        for appid, remainingDrops, playTime in [x for x in apps if x[2] < 2.0]:
             delay = int((2.0 - playTime) * 60 * 60)
             endtime = (datetime.now() + timedelta(seconds=delay))
             p = Idle(appid)
             p.start()
             processes.append((endtime, p))
         if args.verbose:
-            print 'Multi-Ideling %d apps' % len(processes)
+            print('Multi-Ideling %d apps' % len(processes))
 
         # Should be ordered, shortest idle first
         for endtime, p in processes:
             now = datetime.now()
             if endtime < now:
-                print p, 'endtime (%s) is in the past, shutting down' % (endtime,)
+                print(p, 'endtime (%s) is in the past, shutting down' % (endtime,))
                 p.shutdown()
                 p.join()
                 continue
             diff = int(ceil((endtime - now).total_seconds()))
             if diff <= 0:
-                print p, 'diff (%s) is below 0, shutting down' % (diff,)
+                print(p, 'diff (%s) is below 0, shutting down' % (diff,))
                 p.shutdown()
                 p.join()
                 continue
-            print 'Sleeping for %s till %s' %(
+            print('Sleeping for %s till %s' %(
                 strfsec(diff),
                 (datetime.now() + timedelta(seconds=diff)).strftime('%c')
-            )
+            ))
             sleep(diff)
             if args.verbose:
-                print p, 'Woke up, shutting down'
+                print(p, 'Woke up, shutting down')
             p.shutdown()
             p.join()
 
@@ -263,12 +263,12 @@ def main_idle(apps):
             apps = parse_badges_page()
             # If there are still apps with < 2.0h play time, restart
             if [x for x in apps if x[2] < 2.0]:
-                print 'There are still apps within refund time, restarting multi-idle'
+                print('There are still apps within refund time, restarting multi-idle')
                 return main_idle(apps)
 
     # All apps should be out of refund time, (playTime >= 2h), idle one by one
     if args.verbose:
-        print 'Startin sequential idle of %d apps' % len(apps)
+        print('Startin sequential idle of %d apps' % len(apps))
     new_apps = [] # new apps added douring idle
     for appid, remainingDrops, playTime in apps:
         idletime = 0
@@ -276,12 +276,12 @@ def main_idle(apps):
         p.start()
         while remainingDrops > 0:
             delay = calc_delay(remainingDrops, playTime)
-            print '%d has %d remaining drops: Ideling for %s (\'till %s)' % (
+            print('%d has %d remaining drops: Ideling for %s (\'till %s)' % (
                     appid,
                     remainingDrops,
                     strfsec(delay),
                     (datetime.now() + timedelta(seconds=delay)).strftime('%c')
-            )
+            ))
             idletime += r_sleep(delay)
             if idletime >= MAX_IDLE:
                 break
@@ -289,8 +289,8 @@ def main_idle(apps):
             # Re check for remainingDrops and new apps
             remainingDrops = 0 # Will be re-set if appid is still returned by parse_badges_page()
             for a in parse_badges_page():
-                if not filter(lambda x: x[0] == a[0], apps + new_apps):
-                    print 'Found a new app to idle: %d has %d remaining drops, play time till now: %0.1f hours' % (a[0], a[1], a[2])
+                if not [x for x in apps + new_apps if x[0] == a[0]]:
+                    print('Found a new app to idle: %d has %d remaining drops, play time till now: %0.1f hours' % (a[0], a[1], a[2]))
                     if a[2] >= 2.0:
                         # Already out of refund time, add to the one by one idle list
                         apps.append(a)
@@ -302,7 +302,7 @@ def main_idle(apps):
                 if a[0] == appid:
                     # Still drops left for this app, continue idleing
                     appid, remainingDrops, playTime = a
-            print '%d drops remaining, playtime is %0.1f' %(remainingDrops, playTime)
+            print('%d drops remaining, playtime is %0.1f' %(remainingDrops, playTime))
 
         # Stop idleing
         p.shutdown()
@@ -310,10 +310,10 @@ def main_idle(apps):
 
     if new_apps:
         # We've found new apps that need "refund-idle"
-        print 'Found %d new apps that need "refund-idle":' %(len(new_apps),)
+        print('Found %d new apps that need "refund-idle":' %(len(new_apps),))
         if args.verbose:
             for appid, remainingDrops, playTime in new_apps:
-                print '%d has %d remaining drops, play time till now: %0.1f hours' % (appid, remainingDrops, playTime)
+                print('%d has %d remaining drops, play time till now: %0.1f hours' % (appid, remainingDrops, playTime))
         return main_idle(new_apps)
 
 
@@ -337,7 +337,7 @@ if __name__ == '__main__':
         # make sure this is only run once
         pidfile = os.path.join(os.path.dirname(__file__), 'steam-idle.pid')
         if os.path.isfile(pidfile):
-            print 'already running ("%s")' % pidfile
+            print('already running ("%s")' % pidfile)
             sys.exit(1)
         with open(pidfile, 'w') as pf:
             pf.write(str(os.getpid()))
@@ -345,16 +345,16 @@ if __name__ == '__main__':
 
         # Check if Steam is running
         if not is_steam_running():
-            print 'Could not find a running Steam instance!'
-            print 'Please start your Steam Client.'
+            print('Could not find a running Steam instance!')
+            print('Please start your Steam Client.')
             sys.exit(1)
 
     apps = parse_badges_page()
 
-    print '%d games with a total of %d card drops left:' % (len(apps), sum([x[1] for x in apps]))
+    print('%d games with a total of %d card drops left:' % (len(apps), sum([x[1] for x in apps])))
     if args.verbose or args.list:
         for appid, remainingDrops, playTime in apps:
-            print '%d has %d remaining drops, play time till now: %0.1f hours' % (appid, remainingDrops, playTime)
+            print('%d has %d remaining drops, play time till now: %0.1f hours' % (appid, remainingDrops, playTime))
     if args.list:
         sys.exit(0)
 
