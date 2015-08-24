@@ -11,6 +11,7 @@ import multiprocessing
 from bs4 import BeautifulSoup
 from datetime import timedelta, datetime
 from math import ceil
+import logging
 from steamweb import SteamWebBrowserCfg as SteamWebBrowser
 
 BLACKLIST = (368020, 335590)
@@ -39,19 +40,24 @@ def get_steam_api():
         steam_api.SteamAPI_Shutdown.restype = c_void_p
     except Exception as e:
         print('Not loading Steam library: {}'.format(e))
+        raise
     return steam_api
 
 class Idle(multiprocessing.Process):
-    def __init__(self, appid):
+    def __init__(self, appid, args=None):
         super(Idle, self).__init__()
+        self.logger = logging.getLogger('.'.join((__name__, 'Idle', str(appid))))
         self.appid = int(appid)
         self.name += '-[%s]' % str(self.appid)
         self.exit = multiprocessing.Event()
+        self.args = args
+        self.logger.debug('Init complete')
 
     def run(self):
         os.environ['SteamAppId'] = str(self.appid)
         p = multiprocessing.current_process()
         me = '%s(%d):' % (p.name, p.pid)
+        self.logger.debug('run(), my PID is: %d' %p.pid)
         
         self.redirect_streams()
         steam_api = get_steam_api()
@@ -60,6 +66,7 @@ class Idle(multiprocessing.Process):
             self.restore_streams()
         except:
             self.restore_streams()
+            self.logger.exception('Failed to init steam API')
             print(me, "Couldn't initialize Steam API") 
             sys.stdout.flush()
             return
@@ -76,22 +83,25 @@ class Idle(multiprocessing.Process):
 
         # Shutsdown steam api
         steam_api.SteamAPI_Shutdown()
+        self.logger.debug('API shutdown completed')
 
     def shutdown(self):
         self.exit.set()
 
     def redirect_streams(self):
-        # redirect stdout and stderr of steam api
-        devnull = os.open(os.devnull, 777)
-        self.old_stdout = os.dup(1)
-        self.old_stderr = os.dup(2)
-        os.dup2(devnull, 1)
-        os.dup2(devnull, 2)
+        if not (self.args and self.args.debug):
+            # redirect stdout and stderr of steam api
+            devnull = os.open(os.devnull, 777)
+            self.old_stdout = os.dup(1)
+            self.old_stderr = os.dup(2)
+            os.dup2(devnull, 1)
+            os.dup2(devnull, 2)
 
     def restore_streams(self):
-        # restore stdout and stderr
-        os.dup2(self.old_stdout, 1)
-        os.dup2(self.old_stderr, 2)
+        if not (self.args and self.args.debug):
+            # restore stdout and stderr
+            os.dup2(self.old_stdout, 1)
+            os.dup2(self.old_stderr, 2)
 
 def r_sleep(sec):
     ''' Sleep sec seconds and return seconds slept '''
@@ -224,7 +234,7 @@ def main_idle(apps):
         for appid, remainingDrops, playTime in [x for x in apps if x[2] < 2.0]:
             delay = int((2.0 - playTime) * 60 * 60)
             endtime = (datetime.now() + timedelta(seconds=delay))
-            p = Idle(appid)
+            p = Idle(appid, args)
             p.start()
             processes.append((endtime, p))
         if args.verbose:
@@ -268,7 +278,7 @@ def main_idle(apps):
     new_apps = [] # new apps added douring idle
     for appid, remainingDrops, playTime in apps:
         idletime = 0
-        p = Idle(appid)
+        p = Idle(appid, args)
         p.start()
         while remainingDrops > 0:
             delay = calc_delay(remainingDrops, playTime)
@@ -331,7 +341,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.debug:
-        import logging
         logging.basicConfig(format='%(asctime)s (%(name)s.%(funcName)s) [%(levelname)s] %(message)s', level=logging.DEBUG)
 
     swb = SteamWebBrowser()
