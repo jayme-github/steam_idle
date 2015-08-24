@@ -20,10 +20,6 @@ re_Drops = re.compile(r'(\d+) card drop(?:s\b|\b) remaining')
 re_AppId = re.compile(r'card_drop_info_gamebadge_(\d+)_')
 re_PlayTime = re.compile(r'(\d+\.\d) hrs on record')
 
-swb = SteamWebBrowser()
-if not swb.logged_in():
-    swb.login()
-
 def get_steam_api():
     try:
         if sys.platform.startswith('win'):
@@ -328,10 +324,19 @@ def is_steam_running():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Idle all steam apps with card drops left.')
     parser.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
+    parser.add_argument('-d', '--debug', help='enable debug output', action='store_true')
     parser.add_argument('-l', '--list', help='don\'t idle, just list apps with card drops', action='store_true')
     parser.add_argument('--skip-multi', help='don\'t multi-idle all apps with playtime < 2h first', action='store_true')
     parser.add_argument('-a', '--appid', help='idle only specific app ID\'s', type=int, nargs='*')
     args = parser.parse_args()
+
+    if args.debug:
+        import logging
+        logging.basicConfig(format='%(asctime)s (%(name)s.%(funcName)s) [%(levelname)s] %(message)s', level=logging.DEBUG)
+
+    swb = SteamWebBrowser()
+    if not swb.logged_in():
+        swb.login()
 
     if not args.list:
         # make sure this is only run once
