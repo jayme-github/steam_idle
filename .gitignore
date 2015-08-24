@@ -32,6 +32,7 @@ nosetests.xml
 .pydevproject
 
 python_interpreter_defaults
+.pythonrc*
 *.log
 cookies.lwp*
 config.cfg
@@ -39,3 +40,6 @@ config.cfg
 *.swp
 .venv
 steam-idle.pid
+*.e4p
+.eric5project
+Ui_*.py
