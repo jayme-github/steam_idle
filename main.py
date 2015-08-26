@@ -1,5 +1,7 @@
+#!/usr/bin/env python
+
 from PyQt4 import QtGui
-from ui.mainwindow import MainWindow
+from steam_idle_qt.ui.mainwindow import MainWindow
 
 if __name__ == "__main__":
     import sys
