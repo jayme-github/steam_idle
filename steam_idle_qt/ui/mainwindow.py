@@ -5,15 +5,15 @@ Module implementing MainWindow.
 """
 
 from PyQt4.QtCore import pyqtSlot, Qt, QThread, pyqtSignal
-from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressDialog
+from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressDialog, QPixmap, QIcon
 
 from .Ui_mainwindow import Ui_MainWindow
-from steam_idle.page_parser import parse_badges_page
+from steam_idle.page_parser import parse_apps_to_idle
 
 class ParseApps(QThread):
-    dataReady = pyqtSignal(list)
+    dataReady = pyqtSignal(dict)
     def run(self):
-        apps = parse_badges_page()
+        apps = parse_apps_to_idle()
         self.dataReady.emit(apps)
         print("thread is done")
 
@@ -50,21 +50,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
 
     def fillTable(self, apps):
-        def addRow(game, remainingDrops, playtime):
+        def addRow(app):
             """
             Add a game row to the table
             """
             rowId = self.tableWidgetGames.rowCount()
             self.tableWidgetGames.insertRow(rowId)
 
+            # Load pixmap and create an icon
+            icon = QIcon(QPixmap(app.icon))
+
             # Cells are: State, Game, Remaining drops, Playtime
-            stateCell = QTableWidgetItem()
-            gameCell = QTableWidgetItem(str(game)) #TODO: Add game icone
+            stateCell = QTableWidgetItem('s')
+            gameCell = QTableWidgetItem(icon,str(app.name))
+            gameCell.setData(Qt.UserRole, app.appid)
             remainingDropsCell = QTableWidgetItem()
-            # Use setData to have numeric instead of alpha-numeric sorting
-            remainingDropsCell.setData(Qt.EditRole, remainingDrops)
+            remainingDropsCell.setData(Qt.EditRole, app.remainingDrops) # Use setData to have numeric instead of alpha-numeric sorting
             playtimeCell = QTableWidgetItem()
-            playtimeCell.setData(Qt.EditRole, playtime)
+            playtimeCell.setData(Qt.EditRole, app.playTime)
 
             # Add cells
             self.tableWidgetGames.setItem(rowId, 0, stateCell)
@@ -73,8 +76,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.tableWidgetGames.setItem(rowId, 3, playtimeCell)
 
         self.tableWidgetGames.clearContents()
-        for app in apps:
-            addRow(*app)
+        for _, app in apps.items():
+            addRow(app)
         self.tableWidgetGames.resizeRowsToContents()
         self.tableWidgetGames.resizeColumnsToContents()
         self.pr.setValue(1)
