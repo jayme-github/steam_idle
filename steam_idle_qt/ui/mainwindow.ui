@@ -124,6 +124,7 @@
    <addaction name="actionStartStop"/>
    <addaction name="actionNext"/>
   </widget>
+  <widget class="QStatusBar" name="statusBar"/>
   <action name="actionQuit">
    <property name="icon">
     <iconset theme="application-exit">

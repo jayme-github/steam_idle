@@ -5,7 +5,7 @@ Module implementing MainWindow.
 """
 
 from PyQt4.QtCore import pyqtSlot, Qt, QThread, pyqtSignal
-from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressDialog, QPixmap, QIcon
+from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressBar, QPixmap, QIcon
 
 from .Ui_mainwindow import Ui_MainWindow
 from steam_idle.page_parser import parse_apps_to_idle
@@ -15,7 +15,6 @@ class ParseApps(QThread):
     def run(self):
         apps = parse_apps_to_idle()
         self.dataReady.emit(apps)
-        print("thread is done")
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -30,6 +29,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         super().__init__(parent)
         self.setupUi(self)
+        self.statusBar.setMaximumHeight(20)
+        self.progressBar = QProgressBar(self)
+        self.progressBar.setRange(0,1)
+        self.progressBar.setFormat('')
+        self.progressBar.setMaximumHeight(self.statusBar.height())
+        self.statusBar.addPermanentWidget(self.progressBar)
+
         # TODO: Enable actionStartStop etc.
 
         # Create a thread for parsing apps and connect signal
@@ -39,15 +45,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Update the tableWidgetGames (e.g. start _threadParseApps)
         self.updateTable()
 
-    def updateTable(self):
-        # TODO: _threadParseApps is slow and should be done with progress indication
-        self.pr = QProgressDialog(self.tr('Loading data from Steam, please wait'), self.tr('Cancel'), 0, 1, self)
-        self.pr.setWindowModality(Qt.WindowModal)
-        self.pr.setMinimumDuration(0)
-        self.pr.setAutoClose(True)
-        self.pr.setValue(0)
-        self._threadParseApps.start()
+    def startProgressBar(self, message, timeout=0):
+        self.statusBar.showMessage(message)
+        self.progressBar.setRange(0,0)
 
+    def stopProgressBar(self):
+        self.statusBar.clearMessage()
+        self.progressBar.setRange(0,1)
+
+    def updateTable(self):
+        self.startProgressBar('Loading data from Steam...')
+        self._threadParseApps.start()
 
     def fillTable(self, apps):
         def addRow(app):
@@ -76,11 +84,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.tableWidgetGames.setItem(rowId, 3, playtimeCell)
 
         self.tableWidgetGames.clearContents()
+        self.tableWidgetGames.setRowCount(0)
         for _, app in apps.items():
             addRow(app)
-        self.tableWidgetGames.resizeRowsToContents()
         self.tableWidgetGames.resizeColumnsToContents()
-        self.pr.setValue(1)
+        self.tableWidgetGames.resizeRowsToContents()
+        self.stopProgressBar()
 
 
     @pyqtSlot()
