@@ -29,14 +29,15 @@ class App(object):
     name = None
     remainingDrops = None
     playTime = None
+    icon = property(lambda self: self._imgname('icon'))
+    logosmall = property(lambda self: self._imgname('logosmall'))
+    header = property(lambda self: self._imgname('header'))
     def __repr__(self):
         return '<[%d] %s>' %(self.appid or 0, self.name or 'Unknown app')
-    @property
-    def icon(self):
-        return '%d_icon.jpg' % self.appid
-    @property
-    def logosmall(self):
-        return '%d_logosmall.jpg' % self.appid
+    def _imgname(self, imgtype):
+        if not isinstance(self.appid, int):
+            return None
+        return '%d_%s.jpg' % (self.appid, imgtype)
 
 def parse_badge(badge):
     app = App()
@@ -134,10 +135,14 @@ def fetch_images(appinfo):
     print('Starting', multiprocessing.current_process().name)
     appid = appinfo.get('appid')
     fetched = {}
-    for imgtype in ('icon', 'logosmall'):
+    for imgtype in ('icon', 'logosmall', 'header'):
         # FIXME: Path for images
         filename = '%d_%s.jpg' % (appid, imgtype)
-        url = appinfo.get(imgtype+'url')
+        if imgtype == 'header':
+            url = 'http://cdn.akamai.steamstatic.com/steam/apps/%d/header_292x136.jpg' % appid
+        else:
+            url = appinfo.get(imgtype+'url')
+
         r = requests.get(url)
         with open(filename, 'wb') as f:
             f.write(r.content)

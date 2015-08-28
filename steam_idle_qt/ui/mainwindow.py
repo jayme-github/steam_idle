@@ -21,6 +21,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     """
     Class documentation goes here.
     """
+    actionStartStopShowsStart = True # Does the Start/Stop button show the start icon?
+
     def __init__(self, parent=None):
         """
         Constructor
@@ -29,6 +31,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         super().__init__(parent)
         self.setupUi(self)
+        self.labelTotalGamesToIdle.hide()
+        self.labelTotalGamesInRefund.hide()
+        self.labelTotalRemainingDrops.hide()
         self.statusBar.setMaximumHeight(20)
         self.progressBar = QProgressBar(self)
         self.progressBar.setRange(0,1)
@@ -36,14 +41,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.progressBar.setMaximumHeight(self.statusBar.height())
         self.statusBar.addPermanentWidget(self.progressBar)
 
+        self.tableWidgetGames.selectionModel().currentRowChanged.connect(self.on_tableWidgetGamesSelectionModel_currentRowChanged)
         # TODO: Enable actionStartStop etc.
 
         # Create a thread for parsing apps and connect signal
         self._threadParseApps = ParseApps()
-        self._threadParseApps.dataReady.connect(self.fillTable)
+        self._threadParseApps.dataReady.connect(self.updateDataFromSteam)
 
         # Update the tableWidgetGames (e.g. start _threadParseApps)
-        self.updateTable()
+        self.on_actionRefresh_triggered()
 
     def startProgressBar(self, message, timeout=0):
         self.statusBar.showMessage(message)
@@ -53,15 +59,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.statusBar.clearMessage()
         self.progressBar.setRange(0,1)
 
-    def updateTable(self):
-        self.startProgressBar('Loading data from Steam...')
-        self._threadParseApps.start()
-
-    def fillTable(self, apps):
+    def updateDataFromSteam(self, apps):
+        ''' Update UI with data from steam
+        '''
         def addRow(app):
-            """
-            Add a game row to the table
-            """
+            # Add a game row to the table
             rowId = self.tableWidgetGames.rowCount()
             self.tableWidgetGames.insertRow(rowId)
 
@@ -71,7 +73,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # Cells are: State, Game, Remaining drops, Playtime
             stateCell = QTableWidgetItem('s')
             gameCell = QTableWidgetItem(icon,str(app.name))
-            gameCell.setData(Qt.UserRole, app.appid)
+            gameCell.setData(Qt.UserRole, app)
             remainingDropsCell = QTableWidgetItem()
             remainingDropsCell.setData(Qt.EditRole, app.remainingDrops) # Use setData to have numeric instead of alpha-numeric sorting
             playtimeCell = QTableWidgetItem()
@@ -83,13 +85,36 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.tableWidgetGames.setItem(rowId, 2, remainingDropsCell)
             self.tableWidgetGames.setItem(rowId, 3, playtimeCell)
 
+        # Clear table
         self.tableWidgetGames.clearContents()
         self.tableWidgetGames.setRowCount(0)
+
+        totalRemainingDrops = 0
+        gamesInRefundPeriod = 0
         for _, app in apps.items():
+            totalRemainingDrops += app.remainingDrops
+            if app.playTime < 2.0:
+                gamesInRefundPeriod += 1
             addRow(app)
+        self.tableWidgetGames.selectRow(0)
+
+        # Update cell and row sizes
         self.tableWidgetGames.resizeColumnsToContents()
         self.tableWidgetGames.resizeRowsToContents()
+
+        # Update labels
+        self.labelTotalGamesToIdle.setText(self.tr('{} games left to idle').format(len(apps)))
+        self.labelTotalGamesToIdle.show()
+        self.labelTotalGamesInRefund.setText(self.tr('{} games in refund period (<2h play time)').format(gamesInRefundPeriod)) # TODO: Highlight games in refund on click
+        self.labelTotalGamesInRefund.show()
+        self.labelTotalRemainingDrops.setText(self.tr('{} remaining card drops').format(totalRemainingDrops))
+        self.labelTotalRemainingDrops.show()
+
+        # Done
         self.stopProgressBar()
+
+        if len(apps) > 0:
+            self.actionStartStop.enable()
 
 
     @pyqtSlot()
@@ -104,9 +129,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         Slot documentation goes here.
         """
-        # TODO: not implemented yet
-        raise NotImplementedError
+        if self.actionStartStopShowsStart:
+            icon = QIcon.fromTheme("media-playback-stop")
+        else:
+            icon = QIcon.fromTheme("media-playback-start")
+
+        self.actionStartStop.setIcon(icon)
 
     @pyqtSlot()
     def on_actionRefresh_triggered(self):
-        self.updateTable()
+        self.startProgressBar('Loading data from Steam...')
+        self._threadParseApps.start()
+
+    def on_tableWidgetGamesSelectionModel_currentRowChanged(self, current, previous):
+        #print('current:', current.row(), 'previous:', previous.row())
+        gameCell = self.tableWidgetGames.item(current.row(), 1) # Get the gameCell of this row
+        app = gameCell.data(Qt.UserRole)
+        headerPixmap = QPixmap(app.header)
+        self.labelHeaderImage.setPixmap(headerPixmap)
