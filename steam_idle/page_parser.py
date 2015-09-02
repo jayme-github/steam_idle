@@ -14,6 +14,7 @@ re_PlayTime = re.compile(r'(\d+\.\d) hrs on record')
 
 swb = SteamWebBrowserCfg() #TODO: SteamWebBrowserCfg init
 if not swb.logged_in():
+    print('Not logged in')
     swb.login()
 
 
@@ -33,11 +34,32 @@ class App(object):
     logosmall = property(lambda self: self._imgname('logosmall'))
     header = property(lambda self: self._imgname('header'))
     def __repr__(self):
-        return '<[%d] %s>' %(self.appid or 0, self.name or 'Unknown app')
+        return '<[%d] "%s" (%d, %.1f)>' % (
+            self.appid or 0,
+            self.name or 'Unknown app',
+            -1 if self.remainingDrops == None else self.remainingDrops,
+            -1.0 if self.playTime == None else self.playTime,
+        )
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and \
+            self.appid == other.appid and \
+            self.name == other.name and \
+            self.remainingDrops == self.remainingDrops and \
+            self.playTime == self.playTime
+    def __hash__(self):
+        return hash((
+            self.appid,
+            self.name,
+            self.remainingDrops,
+            self.playTime
+        ))
     def _imgname(self, imgtype):
         if not isinstance(self.appid, int):
             return None
         return '%d_%s.jpg' % (self.appid, imgtype)
+    @property
+    def storeUrl(self):
+        return 'https://store.steampowered.com/app/{}'.format(self.appid or '')
 
 def parse_badge(badge):
     app = App()
@@ -86,6 +108,7 @@ def parse_badges_pages(return_all=True, appid_filter=[]):
                 # We already tries to force a login
                 raise Exception('Unable to fetch badges')
             # Looks like we've been redirected. Force a login and retry
+            print('Need to login again')
             swb.login()
             retry = True
             continue
@@ -105,23 +128,23 @@ def parse_badges_pages(return_all=True, appid_filter=[]):
                 continue
 
             # Check if there are drops remaining if return_all==False
-            if return_all or app.remainingDrops > 0:
-                # AppId's where given as filter, check if this AppId is one of those
-                if filter_appids:
-                    if app.appid in appid_filter:
-                        appid_filter.remove(app.appid)
-                    else:
-                        # This appid is NOT in the filter list.
-                        # don't include it in the returned list
-                        continue
+            #if return_all or app.remainingDrops > 0:
+            # AppId's where given as filter, check if this AppId is one of those
+            if filter_appids:
+                if app.appid in appid_filter:
+                    appid_filter.remove(app.appid)
+                else:
+                    # This appid is NOT in the filter list.
+                    # don't include it in the returned list
+                    continue
 
-                # Add app info to the list of parsed badges
-                parsed_apps[app.appid] = app
+            # Add app info to the list of parsed badges
+            parsed_apps[app.appid] = app
 
-                if filter_appids and len(appid_filter) == 0:
-                    # AppId's where given as filter and all of them where found already
-                    # so we are done.
-                    break
+            if filter_appids and len(appid_filter) == 0:
+                # AppId's where given as filter and all of them where found already
+                # so we are done.
+                break
         # Continue with next page
         currentPage += 1
 
@@ -132,7 +155,7 @@ def fetch_images(appinfo):
     ''' Worker function to fetch and store icon and logo for an app
         Will run in multiprocessing.Pool
     '''
-    print('Starting', multiprocessing.current_process().name)
+    #print('Starting', multiprocessing.current_process().name)
     appid = appinfo.get('appid')
     fetched = {}
     for imgtype in ('icon', 'logosmall', 'header'):
@@ -165,10 +188,22 @@ def drop_app_cache(appid):
         if os.path.exists(filename):
             os.unlink(filename)
 
+def mockSome():
+    import random
+    apps = {}
+    for i in (232770,262830,285010,321950,343100,307170):
+        a = App()
+        a.appid = i
+        a.remainingDrops = random.randint(0,6)
+        a.playTime = round(random.uniform(0.0, 10.0),1)
+        apps[i] = a
+    return apps
 
 def parse_apps_to_idle(appid_filter=[]):
+
     # parse badges page, add app info (like name and icon)
     apps = parse_badges_pages(appid_filter)
+    #apps = mockSome()
 
     # check for appids not in shelve
     # FIXME: Path for appshelve

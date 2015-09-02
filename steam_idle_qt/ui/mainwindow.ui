@@ -30,7 +30,7 @@
        <bool>true</bool>
       </property>
       <attribute name="horizontalHeaderMinimumSectionSize">
-       <number>5</number>
+       <number>1</number>
       </attribute>
       <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
        <bool>true</bool>
@@ -40,7 +40,7 @@
       </attribute>
       <column>
        <property name="text">
-        <string>State</string>
+        <string notr="true"/>
        </property>
       </column>
       <column>
@@ -161,7 +161,7 @@
      <x>0</x>
      <y>0</y>
      <width>590</width>
-     <height>20</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -175,8 +175,14 @@
    <addaction name="menuFile"/>
   </widget>
   <widget class="QToolBar" name="toolBar">
+   <property name="contextMenuPolicy">
+    <enum>Qt::DefaultContextMenu</enum>
+   </property>
    <property name="windowTitle">
-    <string>toolBar</string>
+    <string>Toolbar</string>
+   </property>
+   <property name="toolButtonStyle">
+    <enum>Qt::ToolButtonTextUnderIcon</enum>
    </property>
    <attribute name="toolBarArea">
     <enum>TopToolBarArea</enum>
@@ -185,9 +191,11 @@
     <bool>false</bool>
    </attribute>
    <addaction name="actionRefresh"/>
+   <addaction name="actionShowAll"/>
    <addaction name="separator"/>
    <addaction name="actionStartStop"/>
    <addaction name="actionNext"/>
+   <addaction name="actionMultiIdle"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
   <action name="actionQuit">
@@ -256,6 +264,41 @@
    </property>
    <property name="toolTip">
     <string>Idle next game</string>
+   </property>
+  </action>
+  <action name="actionShowAll">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="folder-open">
+     <normaloff/>
+    </iconset>
+   </property>
+   <property name="text">
+    <string>Show all</string>
+   </property>
+   <property name="toolTip">
+    <string>Show all apps (with and without remaining drops)</string>
+   </property>
+  </action>
+  <action name="actionMultiIdle">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="utilities-terminal">
+     <normaloff/>
+    </iconset>
+   </property>
+   <property name="text">
+    <string>Multi-Idle</string>
+   </property>
+   <property name="toolTip">
+    <string>Idle all games with less than 2 hour playtime in parallel first</string>
    </property>
   </action>
  </widget>
