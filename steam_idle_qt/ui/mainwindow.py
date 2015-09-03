@@ -4,13 +4,11 @@
 Module implementing MainWindow.
 """
 import os
-from datetime import datetime
 from PyQt4.QtCore import pyqtSlot, Qt, QThread, pyqtSignal, QMetaObject, Q_ARG
 from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressBar, QPixmap, QIcon, QHeaderView
 
 from .Ui_mainwindow import Ui_MainWindow, _fromUtf8, _translate
-from steam_idle.idle import strfsec
-from steam_idle_qt.QIdle import Idle
+from steam_idle_qt.QIdle import Idle, MultiIdle
 from steam_idle.page_parser import parse_apps_to_idle, App #FIXME: Import of idleparser will initialize steambrowser (SLOW)
 
 class ParseApps(QThread):
@@ -29,7 +27,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     activeApps = [] # List of apps currently ideling
     continueToNext = True
     _statusMessage = None
-
 
     def __init__(self, parent=None):
         """
@@ -63,14 +60,25 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._idleInstance = Idle()
         self._idleInstance.moveToThread(self._idleThread)
         self._idleInstance.appDone.connect(self.on_actionNext_triggered)  # called when app has finished ideling
-        self._idleInstance.statusUpdate.connect(self.on_idleStatusUpdate)    # called on new idle period (e.g. new delay)
+        self._idleInstance.statusUpdate.connect(self.startProgressBar) # called on new idle period (e.g. new delay)
         self._idleInstance.finished.connect(self._idleThread.quit)        # FIXME: finished signal never reaches the main thread
         self._idleInstance.steamDataReady.connect(self.updateSteamData)   # called then idle thread has updated steam badge data
+        self._multiIdleThread = QThread()
+        self._multiIdleInstance = MultiIdle()
+        self._multiIdleInstance.moveToThread(self._multiIdleThread)
+        self._multiIdleInstance.finished.connect(self._multiIdleThread.quit)
+        self._multiIdleInstance.statusUpdate.connect(self.startProgressBar)
+        self._multiIdleInstance.allDone.connect(self.on_multiIdleFinished)
 
         # Update the tableWidgetGames (e.g. start _threadParseApps)
         self.on_actionRefresh_triggered()
 
+    @pyqtSlot(str)
     def startProgressBar(self, message):
+        if message == '':
+            self._statusMessage = None
+            self.stopProgressBar()
+            return
         if self.statusBar.currentMessage() and self.statusBar.currentMessage() != message:
             # stopProgressBar has not been called, save the old state for restoration
             self._statusMessage = self.statusBar.currentMessage()
@@ -98,20 +106,46 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                                     Q_ARG(App, app))
         # Enable nextAction (if more than one app to idle)
         if self.totalGamesToIdle > 1 and self.continueToNext:
-            # FIXME: Don't enable actionNext if MultiIdle is possible/enabled
             self.actionNext.setEnabled(True)
+        self._post_startIdle()
+
+    def startMultiIdle(self):
+        self._multiIdleThread.start()
+        self.activeApps = [a for a in self.apps.values() if a.playTime < 2.0 and a.remainingDrops > 0]
+        print('startMultiIdle for {} apps: {}'.format(len(self.activeApps), self.activeApps))
+        QMetaObject.invokeMethod(self._multiIdleInstance, 'doStartIdle', Qt.QueuedConnection,
+                                    Q_ARG(list, self.activeApps))
+        self.actionNext.setEnabled(False)
+        self._post_startIdle()
+
+    def _post_startIdle(self):
+        ''' Update UI stuff (icons, table etc.) after starting idle '''
         # Switch to stop icon/text
         self.actionStartStop.setText(_translate("MainWindow", '&Stop', None))
         self.actionStartStop.setToolTip(_translate("MainWindow", 'Stop ideling', None))
         self.actionStartStop.setIcon(QIcon.fromTheme(_fromUtf8('media-playback-stop')))
-        # Update statusCell
-        self.tableWidgetGames.item(self.rowIdForAppId(app.appid), 0).setIcon(QIcon.fromTheme(_fromUtf8('media-playback-start')))
+        # Update statusCell(s)
+        for app in self.activeApps:
+            self.tableWidgetGames.item(
+                self.rowIdForAppId(app.appid), 0
+            ).setIcon(QIcon.fromTheme(_fromUtf8('media-playback-start')))
 
     def stopIdle(self):
         QMetaObject.invokeMethod(self._idleInstance, 'doStopIdle', Qt.QueuedConnection)
+        self._post_stopIdle()
+
+    def stopMultiIdle(self):
+        QMetaObject.invokeMethod(self._multiIdleInstance, 'doStopIdle', Qt.QueuedConnection)
+        self._post_stopIdle()
+
+    def _post_stopIdle(self):
+        ''' Update UI stuff (icons, table etc.) after stopping idle '''
         # Update statusCells
         for app in self.activeApps:
-            self.tableWidgetGames.item(self.rowIdForAppId(app.appid), 0).setIcon(QIcon())
+            self.tableWidgetGames.item(
+                self.rowIdForAppId(app.appid), 0
+            ).setIcon(QIcon())
+        # remove active apps and stop progressbar
         self.activeApps = []
         self.stopProgressBar()
         # Disable nextAction
@@ -120,7 +154,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actionStartStop.setText(_translate("MainWindow", '&Start', None))
         self.actionStartStop.setToolTip(_translate("MainWindow", 'Start ideling', None))
         self.actionStartStop.setIcon(QIcon.fromTheme(_fromUtf8('media-playback-start')))
-
 
     def rowIdForAppId(self, appid):
         ''' Returns the rowId that contains appid or -1 if it was not found
@@ -136,9 +169,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def add_updateRow(self, app):
         ''' Updates entries in the tableView with new data, adds new rows if needed
         '''
-        # Temporarily disable sorting, see http://doc.qt.io/qt-5/qtablewidget.html#setItem
-        self.tableWidgetGames.setSortingEnabled(False)
-
         rowId = self.rowIdForAppId(app.appid)
         if rowId >= 0:
             #print('found rowId %d for app: %s' %(rowId, app))
@@ -167,7 +197,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             gameCell = QTableWidgetItem(app.name)
             # Store app instance (can't be looked up via model.match() for some reason)
             gameCell.setData(Qt.UserRole, app)
-            if os.path.exists(app.icon): # FIXME: Path for images
+            if os.path.exists(app.icon): # TODO: Path for images
                 # Load pixmap and create an icon
                 gameIcon = QIcon(QPixmap(app.icon))
                 gameCell.setIcon(gameIcon)
@@ -190,9 +220,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         else:
             self.tableWidgetGames.setRowHidden(rowId, True)
 
-        # Re-Enable sorting
-        self.tableWidgetGames.setSortingEnabled(True)
-
     @pyqtSlot(dict)
     def updateSteamData(self, apps=None):
         ''' Update UI with data from steam
@@ -206,6 +233,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.totalRemainingDrops = 0
             self.gamesInRefundPeriod = 0
 
+            # Temporarily disable sorting, see http://doc.qt.io/qt-5/qtablewidget.html#setItem
+            self.tableWidgetGames.setSortingEnabled(False)
+            try:
+                self.tableWidgetGames.horizontalHeader().sortIndicatorChanged.disconnect(self.tableWidgetGames.resizeRowsToContents)
+            except TypeError:
+                # Raises TypeError if not connected:
+                # TypeError: disconnect() failed between 'sortIndicatorChanged' and 'resizeRowsToContents'
+                pass
+
             for _, app in self.apps.items():
                 self.totalRemainingDrops += app.remainingDrops
                 if app.remainingDrops > 0:
@@ -213,6 +249,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     if app.playTime < 2.0:
                         self.gamesInRefundPeriod += 1
                 self.add_updateRow(app)
+
+            # Re-Enable sorting
+            self.tableWidgetGames.setSortingEnabled(True)
+            self.tableWidgetGames.horizontalHeader().sortIndicatorChanged.connect(self.tableWidgetGames.resizeRowsToContents)
 
             # Update cell and row sizes
             self.tableWidgetGames.resizeColumnsToContents()
@@ -245,11 +285,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.stopProgressBar()
 
     def cleanUp(self):
-        #TODO: Redundant code with on_actionStartStop_triggered
-        QMetaObject.invokeMethod(self._idleInstance, 'doStopIdle', Qt.QueuedConnection)
+        if len(self.activeApps) == 1:
+            # Something is running, stop
+            self.stopIdle()
+        elif len(self.activeApps) > 1:
+            # Stop Multi-Idleif enabled
+            self.stopMultiIdle()
         self.stopProgressBar()
         self._idleThread.quit()
+        self._multiIdleThread.quit()
         self._idleThread.wait()
+        self._multiIdleThread.wait()
 
     def closeEvent(self, event):
         self.cleanUp()
@@ -260,37 +306,34 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.close()
 
     @pyqtSlot()
+    def on_multiIdleFinished(self):
+        self.activeApps = []
+        self.updateSteamData() # This will disable actionMultiIdle etc.
+        self.on_actionStartStop_triggered() # Start normal idle process
+
+    @pyqtSlot()
     def on_actionStartStop_triggered(self):
         self.continueToNext = True
         if len(self.activeApps) == 1:
-            # Something is running
-            # Stop
+            # Something is running, stop
             self.stopIdle()
         elif len(self.activeApps) > 1:
-            # TODO: stop multi idle if enabled...
-            print('stopp multiidle')
+            # Stop Multi-Idleif enabled
+            print('stop multiidle')
+            self.stopMultiIdle()
         else:
             # Nothing is running
             if self.actionMultiIdle.isChecked():
-                # TODO: start multi idle if enabled...
+                # Start Multi-Idleif enabled
                 print('start multiidle')
+                self.startMultiIdle()
             else:
                 # Start with the first app in table
                 app = self.tableWidgetGames.item(0, 1).data(Qt.UserRole)
                 self.startIdle(app)
 
-    @pyqtSlot(App, int, datetime)
-    def on_idleStatusUpdate(self, app, delay, until):
-        msg = 'Ideling "{}" for {} (\'till {})'.format(
-            app.name,
-            strfsec(delay),
-            until.strftime('%c'),
-        )
-        self.startProgressBar(msg)
-
     @pyqtSlot()
     def on_actionRefresh_triggered(self):
-        #FIXME: if on_actionRefresh_triggered is called during idle, progressbar state and msg is lost.
         self.startProgressBar('Loading data from Steam...')
         self._threadParseApps.start()
 
@@ -299,7 +342,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         #print('current:', current.row(), 'previous:', previous.row())
         gameCell = self.tableWidgetGames.item(current.row(), 1) # Get the gameCell of this row
         app = gameCell.data(Qt.UserRole)
-        if os.path.exists(app.header): # FIXME: Path for images
+        if os.path.exists(app.header): # TODO: Path for images
             headerPixmap = QPixmap(app.header)
         else:
             headerPixmap = QPixmap('NoImage.png')
@@ -320,13 +363,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 0,
                 hits=-1,
             )
-            #print(len(matches), 'rows to remove')
-            # Reverse the oder of the row numbers as subsequent row numbers change on removal
-            #rowsToHide = [m.row() for m in matches]
-            #rowsToHide.reverse()
-            #print(rowsToHide)
-            #for rId in rowsToHide:
-            #    self.tableWidgetGames.setRowHidden(rId, True)
             for m in matches:
                 self.tableWidgetGames.setRowHidden(m.row(), True)
 
@@ -360,7 +396,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.stopIdle()
         elif len(self.activeApps) > 1:
             # Stop MultiIdle
-            pass
+            self.stopMultiIdle()
+        self.actionMultiIdle.setEnabled(False)
         self.continueToNext = False # Don't continue to next app
         app = self.tableWidgetGames.item(row, 1).data(Qt.UserRole)
         self.startIdle(app)

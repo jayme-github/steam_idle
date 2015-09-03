@@ -148,6 +148,15 @@ def parse_badges_pages(return_all=True, appid_filter=[]):
         # Continue with next page
         currentPage += 1
 
+    if not parsed_apps:
+        #FIXME: empty badges page == no good.
+        print('ERRPOR: Could not find any badges on badge page')
+        from tempfile import NamedTemporaryFile
+        tmpf = NamedTemporaryFile(prefix='quickDump_', suffix='.html', delete=False)
+        print('Dumping r.content to: "file://%s"' % tmpf.name)
+        tmpf.write(r.content)
+        tmpf.close()
+
     return parsed_apps
 
 
@@ -159,7 +168,7 @@ def fetch_images(appinfo):
     appid = appinfo.get('appid')
     fetched = {}
     for imgtype in ('icon', 'logosmall', 'header'):
-        # FIXME: Path for images
+        # TODO: Path for images
         filename = '%d_%s.jpg' % (appid, imgtype)
         if imgtype == 'header':
             url = 'http://cdn.akamai.steamstatic.com/steam/apps/%d/header_292x136.jpg' % appid
@@ -175,8 +184,8 @@ def fetch_images(appinfo):
 def drop_app_cache(appid):
     ''' Drop all info about an app (images from filesystem and app info from shelve)
     '''
-    # FIXME: Path for images
-    # FIXME: Path for appshelve
+    # TODO: Path for images
+    # TODO: Path for appshelve
     with shelve.open('appshelve') as appshelve:
         try:
             del appshelve[appid]
@@ -206,7 +215,7 @@ def parse_apps_to_idle(appid_filter=[]):
     #apps = mockSome()
 
     # check for appids not in shelve
-    # FIXME: Path for appshelve
+    # TODO: Path for appshelve
     appshelve = shelve.open('appshelve')
     appids_not_in_shelve = []
     for appid in apps.keys():

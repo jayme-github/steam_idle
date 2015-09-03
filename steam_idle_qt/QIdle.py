@@ -7,6 +7,7 @@ from PyQt4.QtCore import pyqtSlot, pyqtSignal, QObject, QTimer
 
 class BaseIdle(QObject):
     finished = pyqtSignal()
+    statusUpdate = pyqtSignal(str)
     idleTimer = None
 
     def _stopTimer(self):
@@ -18,7 +19,6 @@ class BaseIdle(QObject):
 
 class Idle(BaseIdle):
     appDone = pyqtSignal(App)
-    statusUpdate = pyqtSignal(App, int, datetime)
     steamDataReady = pyqtSignal(dict)
     idleChild = None
     app = None
@@ -42,7 +42,11 @@ class Idle(BaseIdle):
                 print('child is still running:', self.idleChild)
             # idleChild is setup or still running
 
-            self.statusUpdate.emit(self.app, delay, until)
+            self.statusUpdate.emit('Ideling "{}" for {} (\'till {})'.format(
+                self.app.name,
+                strfsec(delay),
+                until.strftime('%c'),
+            ))
             self._stopTimer() # Will stop the timer if it exists
             self.idleTimer = QTimer()
             self.idleTimer.timeout.connect(self.doAskForUpdate)
@@ -99,7 +103,7 @@ class Idle(BaseIdle):
         print('i should be gone now')
 
 class MultiIdle(BaseIdle):
-    statusUpdate = pyqtSignal(int, datetime) # int: number of childs, datetime: end time of next child
+    allDone = pyqtSignal()
     idleChilds = {}
 
     def _stopChild(self, p):
@@ -108,13 +112,14 @@ class MultiIdle(BaseIdle):
         del self.idleChilds[p]
 
     @pyqtSlot(list)
-    def doStartMultiIdle(self, apps):
+    def doStartIdle(self, apps):
         print('MultiIdle.multiIdle(%s)' %apps)
         for app in apps:
             delay = int((2.0 - app.playTime) * 60 * 60)
             if delay <= 0:
                 continue
             endtime = (datetime.now() + timedelta(seconds=delay))
+            self.statusUpdate.emit('Launching IdleChild {} of {}'.format(len(self.idleChilds) + 1, len(apps)))
             p = IdleChild(app)
             # Start the (idle) process
             p.start()
@@ -122,6 +127,7 @@ class MultiIdle(BaseIdle):
             if len(self.idleChilds) < len(apps):
                 # Steam client will crash if childs spawn too fast
                 sleep(1)
+        self.statusUpdate.emit('')
         self._idle()
 
     @pyqtSlot()
@@ -132,30 +138,41 @@ class MultiIdle(BaseIdle):
             p, endtime = sorted(self.idleChilds.items(), key=lambda x: x[1])[0]
         except IndexError:
             # No childs left, all done
+            self._stopTimer()
+            self.allDone.emit()
             self.finished.emit()
         else:
-            self.statusUpdate(len(self.idleChilds), endtime)
+            self.statusUpdate.emit('Multi-Idle {} games, next update at {}'.format(
+                len(self.idleChilds),
+                endtime.strftime('%c'),
+            ))
 
             now = datetime.now()
+            diff = int(ceil((endtime - now).total_seconds()))
             if endtime < now:
                 print(p, 'endtime (%s) is in the past, shutting down' % (endtime,))
                 self._stopChild(p)
-            diff = int(ceil((endtime - now).total_seconds()))
-            if diff <= 0:
+                self._idle()
+            elif diff <= 0:
                 print(p, 'diff (%s) is below 0, shutting down' % (diff,))
                 self._stopChild(p)
-            print('Sleeping for %s till %s' %(
-                strfsec(diff),
-                (now + timedelta(seconds=diff)).strftime('%c')
-            ))
-            self._stopTimer() # Will stop the timer if it exists
-            self.idleTimer = QTimer()
-            self.idleTimer.timeout.connect(self._idle)
-            self.idleTimer.setSingleShot(True)
-            self.idleTimer.start(diff*1000)
+                self._idle()
+            else:
+                print('Sleeping for %s till %s' %(
+                    strfsec(diff),
+                    (now + timedelta(seconds=diff)).strftime('%c')
+                ))
+                self._stopTimer() # Will stop the timer if it exists
+                self.idleTimer = QTimer()
+                self.idleTimer.timeout.connect(self._idle)
+                self.idleTimer.setSingleShot(True)
+                self.idleTimer.start(diff*1000)
 
     @pyqtSlot()
     def doStopIdle(self):
         for p in list(self.idleChilds.keys()):
+            self.statusUpdate.emit('Stopping IdleChilds...')
             self._stopChild(p)
+        self.statusUpdate.emit('')
+        self._stopTimer()
         self.finished.emit()

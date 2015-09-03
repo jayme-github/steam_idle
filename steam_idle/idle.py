@@ -24,13 +24,12 @@ class IdleChild(multiprocessing.Process):
         p = multiprocessing.current_process()
         me = '%s(%d):' % (p.name, p.pid)
 
-        #self.redirect_streams()
+        self.redirect_streams()
         try:
             steam_api.SteamAPI_Init()
-            pass
-            #self.restore_streams()
+            self.restore_streams()
         except:
-            #self.restore_streams()
+            self.restore_streams()
             print(me, "Couldn't initialize Steam API")
             sys.stdout.flush()
             return
