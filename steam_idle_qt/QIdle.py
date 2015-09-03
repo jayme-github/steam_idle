@@ -119,6 +119,9 @@ class MultiIdle(BaseIdle):
             # Start the (idle) process
             p.start()
             self.idleChilds[p] = endtime
+            if len(self.idleChilds) < len(apps):
+                # Steam client will crash if childs spawn too fast
+                sleep(1)
         self._idle()
 
     @pyqtSlot()
