@@ -237,6 +237,8 @@ def main_idle(apps):
             p = Idle(appid, args)
             p.start()
             processes.append((endtime, p))
+            # Steam client will crash if childs spawn too fast; Fixes #1
+            sleep(1)
         if args.verbose:
             print('Multi-Ideling %d apps' % len(processes))
 
