@@ -7,6 +7,7 @@ from PyQt4.QtCore import pyqtSlot, pyqtSignal, QObject, QTimer
 
 class BaseIdle(QObject):
     finished = pyqtSignal()
+    appDone = pyqtSignal(App)
     statusUpdate = pyqtSignal(str)
     idleTimer = None
 
@@ -18,7 +19,6 @@ class BaseIdle(QObject):
             self.idleTimer = None
 
 class Idle(BaseIdle):
-    appDone = pyqtSignal(App)
     steamDataReady = pyqtSignal(dict)
     idleChild = None
     app = None
@@ -127,7 +127,6 @@ class MultiIdle(BaseIdle):
             if len(self.idleChilds) < len(apps):
                 # Steam client will crash if childs spawn too fast
                 sleep(1)
-        self.statusUpdate.emit('')
         self._idle()
 
     @pyqtSlot()
@@ -151,10 +150,12 @@ class MultiIdle(BaseIdle):
             diff = int(ceil((endtime - now).total_seconds()))
             if endtime < now:
                 print(p, 'endtime (%s) is in the past, shutting down' % (endtime,))
+                self.appDone.emit(p.app)
                 self._stopChild(p)
                 self._idle()
             elif diff <= 0:
                 print(p, 'diff (%s) is below 0, shutting down' % (diff,))
+                self.appDone.emit(p.app)
                 self._stopChild(p)
                 self._idle()
             else:
@@ -171,8 +172,7 @@ class MultiIdle(BaseIdle):
     @pyqtSlot()
     def doStopIdle(self):
         for p in list(self.idleChilds.keys()):
-            self.statusUpdate.emit('Stopping IdleChilds...')
+            #self.statusUpdate.emit('Stopping IdleChilds...')
             self._stopChild(p)
-        self.statusUpdate.emit('')
         self._stopTimer()
         self.finished.emit()

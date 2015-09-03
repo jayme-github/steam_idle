@@ -59,26 +59,32 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._idleThread = QThread()
         self._idleInstance = Idle()
         self._idleInstance.moveToThread(self._idleThread)
-        self._idleInstance.appDone.connect(self.on_actionNext_triggered)  # called when app has finished ideling
-        self._idleInstance.statusUpdate.connect(self.startProgressBar) # called on new idle period (e.g. new delay)
+        self._idleInstance.appDone.connect(self.on_idleNextApp)           # called when app has finished ideling
+        self._idleInstance.statusUpdate.connect(self.do_idleStatusUpdate)    # called on new idle period (e.g. new delay)
         self._idleInstance.finished.connect(self._idleThread.quit)        # FIXME: finished signal never reaches the main thread
         self._idleInstance.steamDataReady.connect(self.updateSteamData)   # called then idle thread has updated steam badge data
         self._multiIdleThread = QThread()
         self._multiIdleInstance = MultiIdle()
         self._multiIdleInstance.moveToThread(self._multiIdleThread)
         self._multiIdleInstance.finished.connect(self._multiIdleThread.quit)
-        self._multiIdleInstance.statusUpdate.connect(self.startProgressBar)
+        self._multiIdleInstance.statusUpdate.connect(self.do_idleStatusUpdate)
         self._multiIdleInstance.allDone.connect(self.on_multiIdleFinished)
+        self._multiIdleInstance.appDone.connect(self.on_actionRefresh_triggered)
 
         # Update the tableWidgetGames (e.g. start _threadParseApps)
         self.on_actionRefresh_triggered()
 
     @pyqtSlot(str)
+    def do_idleStatusUpdate(self, msg):
+        self.statusBar.clearMessage()
+        self.startProgressBar(msg)
+
+    @pyqtSlot(str)
     def startProgressBar(self, message):
-        if message == '':
-            self._statusMessage = None
-            self.stopProgressBar()
-            return
+        #if message == '':
+        #    self._statusMessage = None
+        #    self.stopProgressBar()
+        #    return
         if self.statusBar.currentMessage() and self.statusBar.currentMessage() != message:
             # stopProgressBar has not been called, save the old state for restoration
             self._statusMessage = self.statusBar.currentMessage()
@@ -120,6 +126,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _post_startIdle(self):
         ''' Update UI stuff (icons, table etc.) after starting idle '''
+        self.actionMultiIdle.setEnabled(False) # One can't change multi-idle during idle
         # Switch to stop icon/text
         self.actionStartStop.setText(_translate("MainWindow", '&Stop', None))
         self.actionStartStop.setToolTip(_translate("MainWindow", 'Stop ideling', None))
@@ -154,6 +161,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actionStartStop.setText(_translate("MainWindow", '&Start', None))
         self.actionStartStop.setToolTip(_translate("MainWindow", 'Start ideling', None))
         self.actionStartStop.setIcon(QIcon.fromTheme(_fromUtf8('media-playback-start')))
+        self.on_actionRefresh_triggered() #Update data
 
     def rowIdForAppId(self, appid):
         ''' Returns the rowId that contains appid or -1 if it was not found
@@ -266,20 +274,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.labelTotalRemainingDrops.setText(self.tr('{} remaining card drops').format(self.totalRemainingDrops))
             self.labelTotalRemainingDrops.show()
 
-            # Enable actionStartStop if there are apps to idle
-            if len(self.apps) > 0:
-                self.actionStartStop.setEnabled(True)
+            # Leave actions untuched if idle is running
+            if not self.activeApps:
+                # Enable actionStartStop if there are apps to idle
+                if len(self.apps) > 0:
+                    self.actionStartStop.setEnabled(True)
 
-            # Enable/Disable actionMultiIdle
-            if self.gamesInRefundPeriod >= 2:
-                # Enable and check by default
-                # TODO: Configuration item for multi-idle as default
-                self.actionMultiIdle.setChecked(True)
-                self.actionMultiIdle.setEnabled(True)
-            else:
-                # Not enough apps for multi-idle, uncheck and disable
-                self.actionMultiIdle.setChecked(False)
-                self.actionMultiIdle.setEnabled(False)
+                # Enable/Disable actionMultiIdle
+                if self.gamesInRefundPeriod >= 2:
+                    # Enable and check by default
+                    # TODO: Configuration item for multi-idle as default
+                    self.actionMultiIdle.setChecked(True)
+                    self.actionMultiIdle.setEnabled(True)
+                else:
+                    # Not enough apps for multi-idle, uncheck and disable
+                    self.actionMultiIdle.setChecked(False)
+                    self.actionMultiIdle.setEnabled(False)
 
         # Done
         self.stopProgressBar()
@@ -329,11 +339,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.startMultiIdle()
             else:
                 # Start with the first app in table
-                app = self.tableWidgetGames.item(0, 1).data(Qt.UserRole)
+                for rowId in range(self.tableWidgetGames.rowCount()):
+                    app = self.tableWidgetGames.item(rowId, 1).data(Qt.UserRole)
+                    if app.remainingDrops > 0:
+                        break
                 self.startIdle(app)
 
-    @pyqtSlot()
-    def on_actionRefresh_triggered(self):
+    @pyqtSlot(App)
+    def on_actionRefresh_triggered(self, app=None):
         self.startProgressBar('Loading data from Steam...')
         self._threadParseApps.start()
 
@@ -353,7 +366,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if checked:
             #print('populating table with apps without drops')
             # Re-populate table with all apps
-            self.startProgressBar('Updating table...')
             self.updateSteamData()
         else:
             # Hide all rows with apps that have no drops remaining
@@ -368,12 +380,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @pyqtSlot()
     def on_actionNext_triggered(self):
+        ''' If next action is triggered, update data from steam and idle the next app '''
         print('on_actionNext_triggered')
+        self.on_actionRefresh_triggered()
+        self.on_idleNextApp()
+
+    @pyqtSlot()
+    def on_idleNextApp(self):
         if not self.continueToNext:
             self.stopIdle()
-            self.updateSteamData() # This will update the table and enable/disable buttons as needed
 
-        rowId = self.rowIdForAppId(self.activeApps[0].appid) # Assue there is only one active app as actionNext is disabled in MultiIdle
+        rowId = self.rowIdForAppId(self.activeApps[0].appid) # Assume there is only one active app as actionNext is disabled in MultiIdle
         appTableWidgetItem = self.tableWidgetGames.item(rowId + 1, 1)
         if appTableWidgetItem:
             # Update icon of old statusCell
