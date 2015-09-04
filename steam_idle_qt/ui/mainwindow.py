@@ -5,7 +5,7 @@ Module implementing MainWindow.
 """
 import os
 from PyQt4.QtCore import pyqtSlot, Qt, QThread, pyqtSignal, QMetaObject, Q_ARG
-from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressBar, QPixmap, QIcon, QHeaderView
+from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressBar, QPixmap, QIcon, QHeaderView, QLabel
 
 from .Ui_mainwindow import Ui_MainWindow, _fromUtf8, _translate
 from steam_idle_qt.QIdle import Idle, MultiIdle
@@ -26,7 +26,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     apps = None
     activeApps = [] # List of apps currently ideling
     continueToNext = True
-    _statusMessage = None
 
     def __init__(self, parent=None):
         """
@@ -45,6 +44,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.progressBar.setFormat('')
         self.progressBar.setMaximumHeight(self.statusBar.height())
         self.progressBar.setMaximumWidth(self.statusBar.width())
+        self.labelStatusBar = QLabel()
+        self.statusBar.addPermanentWidget(self.labelStatusBar)
         self.statusBar.addPermanentWidget(self.progressBar)
 
         # No resize and no sorting for status column
@@ -59,51 +60,42 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._idleThread = QThread()
         self._idleInstance = Idle()
         self._idleInstance.moveToThread(self._idleThread)
-        self._idleInstance.appDone.connect(self.on_idleNextApp)           # called when app has finished ideling
-        self._idleInstance.statusUpdate.connect(self.do_idleStatusUpdate)    # called on new idle period (e.g. new delay)
+        self._idleInstance.appDone.connect(self.on_idleAppDone)           # called when app has finished ideling
+        self._idleInstance.statusUpdate.connect(self.on_idleStatusUpdate)    # called on new idle period (e.g. new delay)
         self._idleInstance.finished.connect(self._idleThread.quit)        # FIXME: finished signal never reaches the main thread
         self._idleInstance.steamDataReady.connect(self.updateSteamData)   # called then idle thread has updated steam badge data
+        self._idleInstance.finished.connect(self._post_stopIdle)
         self._multiIdleThread = QThread()
         self._multiIdleInstance = MultiIdle()
         self._multiIdleInstance.moveToThread(self._multiIdleThread)
         self._multiIdleInstance.finished.connect(self._multiIdleThread.quit)
-        self._multiIdleInstance.statusUpdate.connect(self.do_idleStatusUpdate)
+        self._multiIdleInstance.statusUpdate.connect(self.on_idleStatusUpdate)
         self._multiIdleInstance.allDone.connect(self.on_multiIdleFinished)
-        self._multiIdleInstance.appDone.connect(self.on_actionRefresh_triggered)
+        self._multiIdleInstance.appDone.connect(self.on_multiIdleAppDone)
+        self._multiIdleInstance.finished.connect(self._post_stopIdle)
 
         # Update the tableWidgetGames (e.g. start _threadParseApps)
         self.on_actionRefresh_triggered()
 
     @pyqtSlot(str)
-    def do_idleStatusUpdate(self, msg):
-        self.statusBar.clearMessage()
+    def on_idleStatusUpdate(self, msg):
+        #TODO on_idleStatusUpdate might be removed
+        print('Got idleStatusUpdate:', msg)
         self.startProgressBar(msg)
 
     @pyqtSlot(str)
     def startProgressBar(self, message):
-        #if message == '':
-        #    self._statusMessage = None
-        #    self.stopProgressBar()
-        #    return
-        if self.statusBar.currentMessage() and self.statusBar.currentMessage() != message:
-            # stopProgressBar has not been called, save the old state for restoration
-            self._statusMessage = self.statusBar.currentMessage()
-        self.statusBar.showMessage(message, msecs=0)
+        print('startProgressBar:', message)
+        self.labelStatusBar.setText(message)
         self.progressBar.setToolTip(message)
         self.progressBar.show()
         self.progressBar.setRange(0,0)
 
     def stopProgressBar(self):
-        self.statusBar.clearMessage()
-        if self._statusMessage:
-            # Restore previous message
-            self.startProgressBar(self._statusMessage)
-            self._statusMessage = None
-        else:
-            # stop bar if there is no previous message
-            self.progressBar.setRange(0,1)
-            self.progressBar.setToolTip('')
-            self.progressBar.hide()
+        self.labelStatusBar.clear()
+        self.progressBar.setRange(0,1)
+        self.progressBar.setToolTip('')
+        self.progressBar.hide()
 
     def startIdle(self, app):
         self._idleThread.start()
@@ -139,12 +131,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def stopIdle(self):
         QMetaObject.invokeMethod(self._idleInstance, 'doStopIdle', Qt.QueuedConnection)
-        self._post_stopIdle()
 
     def stopMultiIdle(self):
         QMetaObject.invokeMethod(self._multiIdleInstance, 'doStopIdle', Qt.QueuedConnection)
-        self._post_stopIdle()
 
+    @pyqtSlot()
     def _post_stopIdle(self):
         ''' Update UI stuff (icons, table etc.) after stopping idle '''
         # Update statusCells
@@ -173,6 +164,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             hits=1,
         )
         return matches[0].row() if matches else -1
+
+    def nextAppWithDrops(self, startAt=0):
+        ''' Return the next app with remaining drops or None'''
+        for rowId in range(startAt, self.tableWidgetGames.rowCount()):
+            app = self.tableWidgetGames.item(rowId, 1).data(Qt.UserRole)
+            if app.remainingDrops > 0:
+                return app
+        return None
 
     def add_updateRow(self, app):
         ''' Updates entries in the tableView with new data, adds new rows if needed
@@ -237,6 +236,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.apps = apps
 
         if self.apps != None:
+            #TODO: get selected row and reselect after pouplation
             self.totalGamesToIdle = 0
             self.totalRemainingDrops = 0
             self.gamesInRefundPeriod = 0
@@ -291,21 +291,30 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     self.actionMultiIdle.setChecked(False)
                     self.actionMultiIdle.setEnabled(False)
 
-        # Done
-        self.stopProgressBar()
+        # Done, stop progressBar if it was updates for this refresh
+        if self.labelStatusBar.text() == 'Loading data from Steam...':
+            self.stopProgressBar()
 
     def cleanUp(self):
         if len(self.activeApps) == 1:
+            print('cleanUp: stopIdle()')
             # Something is running, stop
             self.stopIdle()
         elif len(self.activeApps) > 1:
+            print('cleanUp: stopMultiIdle()')
             # Stop Multi-Idleif enabled
             self.stopMultiIdle()
+        print('cleanUp: stopProgressBar')
         self.stopProgressBar()
+        print('cleanUp: idleThread.quit()')
         self._idleThread.quit()
+        print('cleanUp: _multiIdleThread.quit()')
         self._multiIdleThread.quit()
+        print('cleanUp: _idleThread.wait()')
         self._idleThread.wait()
+        print('cleanUp: _multiIdleThread.wait()')
         self._multiIdleThread.wait()
+        print('cleanUp: DONE')
 
     def closeEvent(self, event):
         self.cleanUp()
@@ -339,15 +348,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.startMultiIdle()
             else:
                 # Start with the first app in table
-                for rowId in range(self.tableWidgetGames.rowCount()):
-                    app = self.tableWidgetGames.item(rowId, 1).data(Qt.UserRole)
-                    if app.remainingDrops > 0:
-                        break
-                self.startIdle(app)
+                self.startIdle(self.nextAppWithDrops())
 
-    @pyqtSlot(App)
-    def on_actionRefresh_triggered(self, app=None):
-        self.startProgressBar('Loading data from Steam...')
+    @pyqtSlot()
+    def on_actionRefresh_triggered(self):
+        if not self.labelStatusBar.text():
+            self.startProgressBar('Loading data from Steam...')
         self._threadParseApps.start()
 
     @pyqtSlot('QModelIndex', 'QModelIndex')
@@ -383,21 +389,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         ''' If next action is triggered, update data from steam and idle the next app '''
         print('on_actionNext_triggered')
         self.on_actionRefresh_triggered()
-        self.on_idleNextApp()
+        self.on_idleAppDone()
 
-    @pyqtSlot()
-    def on_idleNextApp(self):
+    @pyqtSlot(App)
+    def on_idleAppDone(self, app=None):
         if not self.continueToNext:
             self.stopIdle()
 
         rowId = self.rowIdForAppId(self.activeApps[0].appid) # Assume there is only one active app as actionNext is disabled in MultiIdle
-        appTableWidgetItem = self.tableWidgetGames.item(rowId + 1, 1)
-        if appTableWidgetItem:
+        nextApp = self.nextAppWithDrops(startAt=rowId+1)
+        if nextApp:
             # Update icon of old statusCell
             self.tableWidgetGames.item(rowId, 0).setIcon(QIcon())
-            app = appTableWidgetItem.data(Qt.UserRole)
+
             # Load the next app into idle thread
-            self.startIdle(app)
+            self.startIdle(nextApp)
             if rowId + 1 == self.tableWidgetGames.rowCount() - 1:
                 # This was the last app(/row), disable next button
                 self.actionNext.setEnabled(False)
@@ -405,6 +411,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # No row with this id: stop
             self.stopIdle()
             self.updateSteamData() # This will update the table and enable/disable buttons as needed
+
+    @pyqtSlot(App)
+    def on_multiIdleAppDone(self, app):
+        rowId = self.rowIdForAppId(app.appid)
+        print('on_multiIdleAppDone, removing icon from row:', rowId)
+        self.tableWidgetGames.item(rowId, 0).setIcon(QIcon()) # Remove "running" icon from app
+        self.on_actionRefresh_triggered()
 
     @pyqtSlot(int, int)
     def on_tableWidgetGames_cellDoubleClicked(self, row, column):
