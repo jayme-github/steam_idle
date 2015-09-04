@@ -71,7 +71,7 @@ class Idle(multiprocessing.Process):
             sys.stdout.flush()
             return
 
-        print(me, 'Ideling appid %d' % (self.appid,))
+        print(me, 'Idling appid %d' % (self.appid,))
         sys.stdout.flush()
 
         while not self.exit.is_set():
@@ -240,7 +240,7 @@ def main_idle(apps):
             # Steam client will crash if childs spawn too fast; Fixes #1
             sleep(1)
         if args.verbose:
-            print('Multi-Ideling %d apps' % len(processes))
+            print('Multi-Idling %d apps' % len(processes))
 
         # Should be ordered, shortest idle first
         for endtime, p in processes:
@@ -267,7 +267,7 @@ def main_idle(apps):
             p.join()
 
         if processes:
-            # Multi-Ideled some apps, update values as they will have changed
+            # Multi-Idled some apps, update values as they will have changed
             apps = parse_badges_page()
             # If there are still apps with < 2.0h play time, restart
             if [x for x in apps if x[2] < 2.0]:
@@ -284,7 +284,7 @@ def main_idle(apps):
         p.start()
         while remainingDrops > 0:
             delay = calc_delay(remainingDrops, playTime)
-            print('%d has %d remaining drops: Ideling for %s (\'till %s)' % (
+            print('%d has %d remaining drops: Idling for %s (\'till %s)' % (
                     appid,
                     remainingDrops,
                     strfsec(delay),
