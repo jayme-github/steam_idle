@@ -17,7 +17,6 @@ class IdleChild(multiprocessing.Process):
         super(IdleChild, self).__init__()
         self.app = app
         self.name += '-[%s]' % str(self.app.name)
-        self.exit = multiprocessing.Event()
 
     def run(self):
         os.environ['SteamAppId'] = str(self.app.appid)
@@ -37,17 +36,8 @@ class IdleChild(multiprocessing.Process):
         print(me, 'Ideling appid %d' % (self.app.appid,))
         sys.stdout.flush()
 
-        while not self.exit.is_set():
+        while True:
             sleep(1)
-
-        print(me, 'shutting down')
-        sys.stdout.flush()
-
-        # Shutsdown steam api
-        steam_api.SteamAPI_Shutdown()
-
-    def shutdown(self):
-        self.exit.set()
 
     def redirect_streams(self):
         # redirect stdout and stderr of steam api

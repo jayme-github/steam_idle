@@ -65,11 +65,11 @@ class Idle(BaseIdle):
         '''
         print('_stopIdle called')
         if self.idleChild != None:
-            print('Shutting down child')
-            self.idleChild.shutdown()
+            print('Terminating child')
+            self.idleChild.terminate()
             self.idleChild.join()
             self.idleChild = None
-            print('Child shut down')
+            print('Child terminated')
         self._stopTimer()
 
     @pyqtSlot(App)
@@ -107,9 +107,13 @@ class MultiIdle(BaseIdle):
     idleChilds = {}
 
     def _stopChild(self, p):
-        p.shutdown()
-        p.join()
+        print('MultiIdle._stopChild(%s)'%p)
+        p.terminate()
+        print('MultiIdle._stopChild(%s) child terminated'%p)
+        p.join() # FIXME: sometimes the idleChild does not finish. could force with [c.kill() for c in psutil.Process(<MYPID>).children()]
+        print('MultiIdle._stopChild(%s) joined thead'%p)
         del self.idleChilds[p]
+        print('MultiIdle._stopChild(%s) DONE'%p)
 
     @pyqtSlot(list)
     def doStartIdle(self, apps):
@@ -124,14 +128,14 @@ class MultiIdle(BaseIdle):
             # Start the (idle) process
             p.start()
             self.idleChilds[p] = endtime
-            if len(self.idleChilds) < len(apps):
-                # Steam client will crash if childs spawn too fast
-                sleep(1)
+            print('doStartIdle: started ', p)
+            # Steam client will crash if childs spawn too fast
+            sleep(1)
         self._idle()
 
     @pyqtSlot()
     def _idle(self):
-        print('MultiIdle.multiIdle: Running with %d childs' % len(self.idleChilds))
+        print('MultiIdle._idle: Running with %d childs' % len(self.idleChilds))
         # Now wait for the idleChilds to finish, idleChilds sorted by endtime
         try:
             p, endtime = sorted(self.idleChilds.items(), key=lambda x: x[1])[0]
@@ -171,8 +175,8 @@ class MultiIdle(BaseIdle):
 
     @pyqtSlot()
     def doStopIdle(self):
-        for p in list(self.idleChilds.keys()):
-            #self.statusUpdate.emit('Stopping IdleChilds...')
+        print('doStopIdle called')
+        for p, _ in sorted(self.idleChilds.items(), key=lambda x: x[1], reverse=True):
             self._stopChild(p)
         self._stopTimer()
         self.finished.emit()
