@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timedelta
 from math import ceil
 from time import sleep
-from steam_idle.page_parser import App, parse_apps_to_idle
+from steam_idle.page_parser import App
 from steam_idle.idle import IdleChild, strfsec, calc_delay
 from PyQt4.QtCore import pyqtSlot, pyqtSignal, QObject, QTimer
 
@@ -11,6 +11,7 @@ class BaseIdle(QObject):
     appDone = pyqtSignal(App)
     statusUpdate = pyqtSignal(str)
     idleTimer = None
+
     def __init__(self):
         super(BaseIdle, self).__init__()
         self.logger = logging.getLogger('.'.join((__name__, self.__class__.__name__)))
@@ -26,6 +27,10 @@ class Idle(BaseIdle):
     steamDataReady = pyqtSignal(dict)
     idleChild = None
     app = None
+
+    def __init__(self, sbb):
+        super(Idle, self).__init__()
+        self.sbb = sbb
 
     def _idle(self):
         if self.app.remainingDrops > 0:
@@ -88,12 +93,18 @@ class Idle(BaseIdle):
 
     @pyqtSlot()
     def doAskForUpdate(self):
-        apps = parse_apps_to_idle() # Update data from steam (it's okay to block this thread)
+        apps = self.sbb.get_apps() # Update data from steam (it's okay to block this thread)
         newapp = apps.get(self.app.appid)
-        self.logger.debug('updated app: OLD: %s NEW: %s' %(self.app, newapp))
-        self.steamDataReady.emit(apps) #Send new steam data to main thread
-        self.app = newapp
-        self._idle()
+        if newapp:
+            self.logger.debug('updated app: OLD: %s NEW: %s' %(self.app, newapp))
+            self.steamDataReady.emit(apps) #Send new steam data to main thread
+            self.app = newapp
+            self._idle()
+        else:
+            self.logger.error('appid %d not found in badged', self.app.appid)
+            # TODO: Maybe better to raise error to main thread than just continue with next app?
+            self._stopIdle()
+            self.appDone.emit(self.app)
 
     @pyqtSlot()
     def doStopIdle(self):

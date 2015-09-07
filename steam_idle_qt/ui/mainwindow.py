@@ -5,19 +5,23 @@ Module implementing MainWindow.
 """
 import os
 import logging
-from PyQt4.QtCore import pyqtSlot, Qt, QThread, pyqtSignal, QMetaObject, Q_ARG
+from PyQt4.QtCore import pyqtSlot, Qt, QThread, pyqtSignal, QMetaObject, Q_ARG, QTimer
 from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressBar, QPixmap, QIcon, QHeaderView, QLabel
 
 from .Ui_mainwindow import Ui_MainWindow, _fromUtf8, _translate
 from steam_idle_qt.QIdle import Idle, MultiIdle
-from steam_idle.page_parser import parse_apps_to_idle, App #FIXME: Import of idleparser will initialize steambrowser (SLOW)
+from steamweb import SteamWebBrowserCfg
+from steam_idle.page_parser import SteamBadges, App #FIXME: Import of idleparser will initialize steambrowser (SLOW)
 
 class ParseApps(QThread):
     steamDataReady = pyqtSignal(dict)
+    def __init__(self, sbb):
+        super(ParseApps, self).__init__()
+        self.sbb = sbb
     def run(self):
         logger = logging.getLogger('.'.join((__name__, self.__class__.__name__)))
         logger.info('Updating apps from steam')
-        apps = parse_apps_to_idle()
+        apps = self.sbb.get_apps()
         logger.debug('ParseApps: {}'.format(apps))
         self.steamDataReady.emit(apps)
 
@@ -37,7 +41,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         super().__init__(parent)
         self.logger = logging.getLogger('.'.join((__name__, self.__class__.__name__)))
+        self.logger.debug('Setting up UI')
         self.setupUi(self)
+        self.logger.debug('Setting up UI DONE')
         self.labelTotalGamesToIdle.hide()
         self.labelTotalGamesInRefund.hide()
         self.labelTotalRemainingDrops.hide()
@@ -50,39 +56,61 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.labelStatusBar = QLabel()
         self.statusBar.addPermanentWidget(self.labelStatusBar)
         self.statusBar.addPermanentWidget(self.progressBar)
+        self.startProgressBar('Loading data from Steam...')
 
         # No resize and no sorting for status column
         self.tableWidgetGames.horizontalHeader().setResizeMode(0, QHeaderView.ResizeToContents)
         self.tableWidgetGames.selectionModel().currentRowChanged.connect(self.on_tableWidgetGamesSelectionModel_currentRowChanged)
 
+        self.logger.debug('Init done')
+        # All slower init work is launched via singleShot timer so the UI is displayed immediately
+        QTimer.singleShot(50, self.slowInit) # 100 msec seems delays slowInit for too long
+        self.logger.debug('initDone signal sent')
+
+    @pyqtSlot()
+    def slowInit(self):
+        ''' All init stuff that takes time should be done in here to not
+            delay the UI startup (fast as possible response to the user).
+        '''
+        # Setup SteamWebBrowser etc.
+        # TODO: Write SteamWebBrowser subclass to be used with Qt
+        self.logger.debug('Init SteamWebBrowserCfg')
+        swb = SteamWebBrowserCfg() #TODO: SteamWebBrowserCfg init
+        if not swb.logged_in():
+            print('NOT LOGGED IN')
+            swb.login()
+        self.sbb = SteamBadges(swb)
+
         # Create a thread for parsing apps and connect signal
-        self._threadParseApps = ParseApps()
+        self._threadParseApps = ParseApps(self.sbb)
         self._threadParseApps.steamDataReady.connect(self.updateSteamData)
 
         # Create worker and thread for ideling
         self._idleThread = QThread()
-        self._idleInstance = Idle()
+        self._idleInstance = Idle(self.sbb)
         self._idleInstance.moveToThread(self._idleThread)
         self._idleInstance.appDone.connect(self.on_idleAppDone)           # called when app has finished ideling
-        self._idleInstance.statusUpdate.connect(self.on_idleStatusUpdate)    # called on new idle period (e.g. new delay)
-        self._idleInstance.finished.connect(self._idleThread.quit)        # FIXME: finished signal never reaches the main thread
+        self._idleInstance.statusUpdate.connect(self.on_idleStatusUpdate) # called on new idle period (e.g. new delay)
         self._idleInstance.steamDataReady.connect(self.updateSteamData)   # called then idle thread has updated steam badge data
-        self._idleInstance.finished.connect(self._post_stopIdle)
+        self._idleInstance.finished.connect(self._post_stopIdle)          # called on thread exit, update UI etc.
+        self._idleInstance.finished.connect(self._idleThread.quit)
+
+        # Create worker and thread for multi idle
         self._multiIdleThread = QThread()
         self._multiIdleInstance = MultiIdle()
         self._multiIdleInstance.moveToThread(self._multiIdleThread)
+        self._multiIdleInstance.statusUpdate.connect(self.on_idleStatusUpdate) # called on start and when idle childs finish
+        self._multiIdleInstance.allDone.connect(self.on_multiIdleFinished)     # called when all apps are done
+        self._multiIdleInstance.appDone.connect(self.on_multiIdleAppDone)      # called when one app is done
+        self._multiIdleInstance.finished.connect(self._post_stopIdle)          # called on thread exit, update UI etc.
         self._multiIdleInstance.finished.connect(self._multiIdleThread.quit)
-        self._multiIdleInstance.statusUpdate.connect(self.on_idleStatusUpdate)
-        self._multiIdleInstance.allDone.connect(self.on_multiIdleFinished)
-        self._multiIdleInstance.appDone.connect(self.on_multiIdleAppDone)
-        self._multiIdleInstance.finished.connect(self._post_stopIdle)
 
         # Update the tableWidgetGames (e.g. start _threadParseApps)
         self.on_actionRefresh_triggered()
 
     @pyqtSlot(str)
     def on_idleStatusUpdate(self, msg):
-        #TODO on_idleStatusUpdate might be removed
+        #TODO Would be nice to have some timer ticking in statusbar
         self.logger.debug('Got idleStatusUpdate: %s' %msg)
         self.startProgressBar(msg)
 
@@ -270,7 +298,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # Update labels
             self.labelTotalGamesToIdle.setText(self.tr('{} games left to idle').format(self.totalGamesToIdle))
             self.labelTotalGamesToIdle.show()
-            self.labelTotalGamesInRefund.setText(self.tr('{} games in refund period (<2h play time)').format(self.gamesInRefundPeriod)) # TODO: Highlight games in refund on click
+            self.labelTotalGamesInRefund.setText(self.tr('{} games in refund period (<2h play time)').format(self.gamesInRefundPeriod))
             self.labelTotalGamesInRefund.show()
             self.labelTotalRemainingDrops.setText(self.tr('{} remaining card drops').format(self.totalRemainingDrops))
             self.labelTotalRemainingDrops.show()
