@@ -1,6 +1,9 @@
 import os
 import sys
+import logging
 from ctypes import CDLL, c_bool, c_void_p
+
+logger = logging.getLogger(__name__)
 
 try:
     if sys.platform.startswith('win'):
@@ -13,14 +16,18 @@ try:
         else:
             so = 'libsteam_api.so'
     else:
+        logger.error('Unsupported operating system')
         raise EnvironmentError('Unsupported operating system')
+    libpath = os.path.join(os.path.dirname(__file__), 'libs', so)
+    logger.debug('Looking for libsteam in "{}"'.format(libpath))
     # Load the library
-    api = CDLL(os.path.join(os.path.dirname(__file__), 'libs', so))
+    api = CDLL(libpath)
     # Define return typed of "exported" functions
     api.SteamAPI_IsSteamRunning.restype = c_bool
     api.SteamAPI_Init.restype = c_bool
     api.SteamAPI_Shutdown.restype = c_void_p
 except Exception as e:
+    logger.exception('Loading steam library failed')
     print('Loading steam library failed: {}'.format(e))
     raise
 
