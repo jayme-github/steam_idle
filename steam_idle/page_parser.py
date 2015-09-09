@@ -1,5 +1,6 @@
 import os
 import re
+import stat
 import shelve
 import logging
 import requests
@@ -24,9 +25,11 @@ class App(object):
     name = None
     remainingDrops = None
     playTime = None
-    icon = property(lambda self: self._imgname('icon'))
-    logosmall = property(lambda self: self._imgname('logosmall'))
-    header = property(lambda self: self._imgname('header'))
+    icon = property(lambda self: self._imgpath('icon'))
+    logosmall = property(lambda self: self._imgpath('logosmall'))
+    header = property(lambda self: self._imgpath('header'))
+    def __init__(self, image_path=''):
+        self.image_path = image_path
     def __repr__(self):
         return '<[%d] "%s" (%d, %.1f)>' % (
             self.appid or 0,
@@ -47,10 +50,10 @@ class App(object):
             self.remainingDrops,
             self.playTime
         ))
-    def _imgname(self, imgtype):
+    def _imgpath(self, imgtype):
         if not isinstance(self.appid, int):
             return None
-        return '%d_%s.jpg' % (self.appid, imgtype)
+        return os.path.join(self.image_path, '%d_%s.jpg' % (self.appid, imgtype))
     @property
     def storeUrl(self):
         return 'https://store.steampowered.com/app/{}'.format(self.appid or '')
@@ -67,35 +70,44 @@ def mockSome():
     return apps
 
 
-def fetch_images(appinfo):
+def fetch_images(job):
     ''' Multiprocessing worker function to fetch and store icon and logo for an app
         Will run in multiprocessing.Pool
     '''
+    appinfo, image_path = job
     appid = appinfo.get('appid')
-    fetched = {}
     for imgtype in ('icon', 'logosmall', 'header'):
-        # TODO: Path for images
         filename = '%d_%s.jpg' % (appid, imgtype)
+        imagepath = os.path.join(image_path, filename)
         if imgtype == 'header':
             url = 'http://cdn.akamai.steamstatic.com/steam/apps/%d/header_292x136.jpg' % appid
         else:
             url = appinfo.get(imgtype+'url')
 
         r = requests.get(url)
-        with open(filename, 'wb') as f:
+        with open(imagepath, 'wb') as f:
             f.write(r.content)
-        fetched[imgtype] = filename
-    return (appid, appinfo.get('name'), fetched)
+    return (appid, appinfo.get('name'))
 
+def chunks(l, n):
+    '''Yield successive n-sized chunks from l.'''
+    for i in range(0, len(l), n):
+        yield l[i:i+n]
 
 class SteamBadges(object):
     ''' Holds methods for parsing badge pages etc. '''
-    def __init__(self, swb):
+    def __init__(self, swb, data_path=''):
         self.logger = logging.getLogger('.'.join((__name__, self.__class__.__name__)))
         self.swb = swb
+        # Setup data path
+        self.data_path = data_path
+        self.shelve_path = os.path.join(self.data_path, 'cache')
+        self.image_path = os.path.join(self.data_path, 'images')
+        if not os.path.exists(self.image_path):
+            os.makedirs(self.image_path, stat.S_IRWXU)
 
     def parse_badge(self, badge):
-        app = App()
+        app = App(self.image_path)
         try:
             # Parse AppId
             drop_info = badge.find('div', {'class': 'card_drop_info_dialog'}).attrs.get('id')
@@ -197,9 +209,7 @@ class SteamBadges(object):
     def drop_app_cache(self, appid):
         ''' Drop all info about an app (images from filesystem and app info from shelve)
         '''
-        # TODO: Path for images
-        # TODO: Path for appshelve
-        with shelve.open('appshelve') as appshelve:
+        with shelve.open(self.shelve_path) as appshelve:
             try:
                 del appshelve[str(appid)]
             except KeyError:
@@ -207,8 +217,9 @@ class SteamBadges(object):
                 pass
         for imgtype in ('icon', 'logosmall'):
             filename = '%d_%s.jpg' % (appid, imgtype)
-            if os.path.exists(filename):
-                os.unlink(filename)
+            imagepath = os.path.join(self.image_path, filename)
+            if os.path.exists(imagepath):
+                os.unlink(imagepath)
 
     def get_apps(self,appid_filter=[]):
         ''' Parse the badge pages, add app info (like name and icon) if needed
@@ -219,8 +230,7 @@ class SteamBadges(object):
         #apps = mockSome()
 
         # check for appids not in shelve
-        # TODO: Path for appshelve
-        appshelve = shelve.open('appshelve')
+        appshelve = shelve.open(self.shelve_path)
         appids_not_in_shelve = []
         for appid in apps.keys():
             if str(appid) in appshelve:
@@ -231,22 +241,30 @@ class SteamBadges(object):
                 appids_not_in_shelve.append(str(appid))
 
         if appids_not_in_shelve:
-            params = {
-                'access_token': self.swb.oauth_access_token,
-                'appids': ','.join(appids_not_in_shelve)
-            }
-            r = self.swb.get('https://api.steampowered.com/ISteamGameOAuth/GetAppInfo/v1/', params=params)
-            data = r.json()
+            # GetAppInfo only returns info for 100 apps at once
+            appinfos = []
+            self.logger.debug('Requesting %d appids from GetAppInfo:', len(appids_not_in_shelve))
+            for appid_chunk in chunks(appids_not_in_shelve, 100):
+                params = {
+                    'access_token': self.swb.oauth_access_token,
+                    'appids': ','.join(appid_chunk)
+                }
+                self.logger.debug('Requesting a chunk of %d appids from GetAppInfo:', len(appid_chunk))
+                r = self.swb.get('https://api.steampowered.com/ISteamGameOAuth/GetAppInfo/v1/', params=params)
+                ainfo = r.json().get('apps', [])
+                appinfos.extend(ainfo)
+                self.logger.debug('GetAppInfo returned data for %d appids:', len(ainfo))
 
             # Retrieve and store icon and logosmall
             pool_size = multiprocessing.cpu_count() * 2
             pool = multiprocessing.Pool(processes=pool_size)
-            pool_outputs = pool.map(fetch_images, data.get('apps'))
+            pool_jobs = [(appinfo, self.image_path) for appinfo in appinfos]
+            pool_outputs = pool.map(fetch_images, pool_jobs)
             pool.close()
             pool.join()
 
             # Merge new data with data from shelve and store new values
-            for appid, name, fetched in pool_outputs:
+            for appid, name in pool_outputs:
                 apps[appid].name = name
                 # Store in shelve
                 data = {

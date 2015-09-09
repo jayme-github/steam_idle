@@ -5,7 +5,7 @@ Module implementing MainWindow.
 """
 import os
 import logging
-from PyQt4.QtCore import pyqtSlot, Qt, QThread, pyqtSignal, QMetaObject, Q_ARG, QTimer
+from PyQt4.QtCore import pyqtSlot, Qt, QThread, pyqtSignal, QMetaObject, Q_ARG, QTimer, QSettings, QPoint, QSize
 from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressBar, QPixmap, QIcon, QHeaderView, QLabel
 
 from .Ui_mainwindow import Ui_MainWindow, _fromUtf8, _translate
@@ -62,10 +62,30 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.tableWidgetGames.horizontalHeader().setResizeMode(0, QHeaderView.ResizeToContents)
         self.tableWidgetGames.selectionModel().currentRowChanged.connect(self.on_tableWidgetGamesSelectionModel_currentRowChanged)
 
+        # Restore settings
+        self.readSettings()
+
         self.logger.debug('Init done')
         # All slower init work is launched via singleShot timer so the UI is displayed immediately
         QTimer.singleShot(50, self.slowInit) # 100 msec seems delays slowInit for too long
         self.logger.debug('initDone signal sent')
+
+    @property
+    def settings(self):
+        return QSettings(QSettings.IniFormat, QSettings.UserScope, 'jayme-github', 'SteamIdle')
+
+    def readSettings(self):
+        settings = self.settings
+        self.logger.debug('Reading settings from "%s"', settings.fileName())
+        pos = settings.value('pos', QPoint(200, 200))
+        size = settings.value('size', QSize(650, 500))
+        self.resize(size)
+        self.move(pos)
+
+    def writeSettings(self):
+        settings = self.settings
+        settings.setValue("pos", self.pos())
+        settings.setValue("size", self.size())
 
     @pyqtSlot()
     def slowInit(self):
@@ -79,7 +99,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if not swb.logged_in():
             print('NOT LOGGED IN')
             swb.login()
-        self.sbb = SteamBadges(swb)
+        data_path = os.path.join(os.path.dirname(self.settings.fileName()), 'SteamIdle')
+        self.logger.debug('Using data path: "%s"', data_path)
+        self.sbb = SteamBadges(swb, data_path)
 
         # Create a thread for parsing apps and connect signal
         self._threadParseApps = ParseApps(self.sbb)
@@ -233,7 +255,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             gameCell = QTableWidgetItem(app.name)
             # Store app instance (can't be looked up via model.match() for some reason)
             gameCell.setData(Qt.UserRole, app)
-            if os.path.exists(app.icon): # TODO: Path for images
+            if os.path.exists(app.icon):
                 # Load pixmap and create an icon
                 gameIcon = QIcon(QPixmap(app.icon))
                 gameCell.setIcon(gameIcon)
@@ -346,6 +368,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.logger.debug('cleanUp: DONE')
 
     def closeEvent(self, event):
+        self.writeSettings()
         self.cleanUp()
         event.accept()
 
@@ -389,7 +412,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def on_tableWidgetGamesSelectionModel_currentRowChanged(self, current, previous):
         gameCell = self.tableWidgetGames.item(current.row(), 1) # Get the gameCell of this row
         app = gameCell.data(Qt.UserRole)
-        if os.path.exists(app.header): # TODO: Path for images
+        if os.path.exists(app.header):
             headerPixmap = QPixmap(app.header)
         else:
             headerPixmap = QPixmap('NoImage.png')
