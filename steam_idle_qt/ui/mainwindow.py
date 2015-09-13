@@ -11,7 +11,7 @@ from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressBar, QPixmap, QI
 from .Ui_mainwindow import Ui_MainWindow, _fromUtf8, _translate
 from steam_idle_qt.QIdle import Idle, MultiIdle
 from steamweb import SteamWebBrowserCfg
-from steam_idle.page_parser import SteamBadges, App #FIXME: Import of idleparser will initialize steambrowser (SLOW)
+from steam_idle.page_parser import SteamBadges, App
 
 class ParseApps(QThread):
     steamDataReady = pyqtSignal(dict)
