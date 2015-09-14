@@ -6,9 +6,10 @@ Module implementing MainWindow.
 import os
 import logging
 from PyQt4.QtCore import pyqtSlot, Qt, QThread, pyqtSignal, QMetaObject, Q_ARG, QTimer, QSettings, QPoint, QSize
-from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressBar, QPixmap, QIcon, QHeaderView, QLabel
+from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressBar, QPixmap, QIcon, QHeaderView, QLabel, QDialog
 
 from .Ui_mainwindow import Ui_MainWindow, _fromUtf8, _translate
+from .settingsdialog import SettingsDialog
 from steam_idle_qt.QIdle import Idle, MultiIdle
 from steamweb import SteamWebBrowserCfg
 from steam_idle.page_parser import SteamBadges, App
@@ -32,6 +33,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     apps = None
     activeApps = [] # List of apps currently ideling
     continueToNext = True
+    _idleThread = None
+    _multiIdleThread = None
+    _threadParseApps = None
 
     def __init__(self, parent=None):
         """
@@ -56,7 +60,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.labelStatusBar = QLabel()
         self.statusBar.addPermanentWidget(self.labelStatusBar)
         self.statusBar.addPermanentWidget(self.progressBar)
-        self.startProgressBar('Loading data from Steam...')
 
         # No resize and no sorting for status column
         self.tableWidgetGames.horizontalHeader().setResizeMode(0, QHeaderView.ResizeToContents)
@@ -65,14 +68,26 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Restore settings
         self.readSettings()
 
-        self.logger.debug('Init done')
-        # All slower init work is launched via singleShot timer so the UI is displayed immediately
-        QTimer.singleShot(50, self.slowInit) # 100 msec seems delays slowInit for too long
-        self.logger.debug('initDone signal sent')
+        if not os.path.exists(self.settings.fileName()) or self.settings.value('steam/password', None) == None:
+            # Init Settings and/or ask for password
+            self.showSettings()
+        else:
+            self.logger.debug('Init done')
+            self.startProgressBar('Loading data from Steam...')
+            # All slower init work is launched via singleShot timer so the UI is displayed immediately
+            QTimer.singleShot(50, self.slowInit) # 100 msec seems delays slowInit for too long
+            self.logger.debug('initDone signal sent')
 
     @property
     def settings(self):
         return QSettings(QSettings.IniFormat, QSettings.UserScope, 'jayme-github', 'SteamIdle')
+
+    @pyqtSlot()
+    def showSettings(self):
+        settingsDialog = SettingsDialog(parent=self)
+        if settingsDialog.exec_() == QDialog.Accepted:
+            self.logger.info('SettingsDialog accepted')
+            self.slowInit()
 
     def readSettings(self):
         settings = self.settings
@@ -357,14 +372,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.stopMultiIdle()
         self.logger.debug('cleanUp: stopProgressBar')
         self.stopProgressBar()
-        self.logger.debug('cleanUp: idleThread.quit()')
-        self._idleThread.quit()
-        self.logger.debug('cleanUp: _multiIdleThread.quit()')
-        self._multiIdleThread.quit()
-        self.logger.debug('cleanUp: _idleThread.wait()')
-        self._idleThread.wait()
-        self.logger.debug('cleanUp: _multiIdleThread.wait()')
-        self._multiIdleThread.wait()
+        if self._idleThread:
+            self.logger.debug('cleanUp: idleThread.quit()')
+            self._idleThread.quit()
+            self.logger.debug('cleanUp: _idleThread.wait()')
+            self._idleThread.wait()
+        if self._multiIdleThread:
+            self.logger.debug('cleanUp: _multiIdleThread.quit()')
+            self._multiIdleThread.quit()
+            self.logger.debug('cleanUp: _multiIdleThread.wait()')
+            self._multiIdleThread.wait()
         self.logger.debug('cleanUp: DONE')
 
     def closeEvent(self, event):
@@ -481,3 +498,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.continueToNext = False # Don't continue to next app
         app = self.tableWidgetGames.item(row, 1).data(Qt.UserRole)
         self.startIdle(app)
+
+    @pyqtSlot()
+    def on_actionSettings_triggered(self):
+        self.showSettings()
