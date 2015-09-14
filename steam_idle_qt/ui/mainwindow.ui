@@ -13,6 +13,9 @@
   <property name="windowTitle">
    <string>Steam Idle</string>
   </property>
+  <property name="locale">
+   <locale language="English" country="UnitedStates"/>
+  </property>
   <widget class="QWidget" name="centralWidget">
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
@@ -160,8 +163,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>590</width>
-     <height>21</height>
+     <width>650</width>
+     <height>20</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
