@@ -99,7 +99,7 @@ class SteamBadges(object):
     def __init__(self, swb, data_path=''):
         self.logger = logging.getLogger('.'.join((__name__, self.__class__.__name__)))
         self.swb = swb
-        # Setup data path
+        # Setup data path NOTE: may use swb.appdata_path
         self.data_path = data_path
         self.shelve_path = os.path.join(self.data_path, 'cache')
         self.image_path = os.path.join(self.data_path, 'images')
@@ -115,7 +115,7 @@ class SteamBadges(object):
         except:
             raise AppIdNotFoundError('Could not parse AppId from badge: %s' % badge.prettify())
 
-        if app.appid in GLOBAL_BLACKLIST:
+        if app.appid in GLOBAL_BLACKLIST: #TODO Blacklist check should be done by the "frontend"
             raise AppIdBlacklistedError('%d is in global blacklist' % app.appid)
 
         try:

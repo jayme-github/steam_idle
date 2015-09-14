@@ -10,8 +10,8 @@ from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressBar, QPixmap, QI
 
 from .Ui_mainwindow import Ui_MainWindow, _fromUtf8, _translate
 from .settingsdialog import SettingsDialog
+from steam_idle_qt.QSteamWebBrowser import QSteamWebBrowser
 from steam_idle_qt.QIdle import Idle, MultiIdle
-from steamweb import SteamWebBrowserCfg
 from steam_idle.page_parser import SteamBadges, App
 
 class ParseApps(QThread):
@@ -36,6 +36,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     _idleThread = None
     _multiIdleThread = None
     _threadParseApps = None
+    _steamPassword = None
 
     def __init__(self, parent=None):
         """
@@ -82,12 +83,25 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def settings(self):
         return QSettings(QSettings.IniFormat, QSettings.UserScope, 'jayme-github', 'SteamIdle')
 
+    @property
+    def steamPassword(self):
+        settings = self.settings
+        password = settings.value('steam/password', '')
+        if password != '':
+            return password
+
+        if self._steamPassword != None:
+            return self._steamPassword
+
+        raise Exception('No password')
+
     @pyqtSlot()
     def showSettings(self):
         settingsDialog = SettingsDialog(parent=self)
         if settingsDialog.exec_() == QDialog.Accepted:
             self.logger.info('SettingsDialog accepted')
             self.slowInit()
+        self.logger.info('SettingsDialog NOT accepted')
 
     def readSettings(self):
         settings = self.settings
@@ -108,12 +122,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             delay the UI startup (fast as possible response to the user).
         '''
         # Setup SteamWebBrowser etc.
-        # TODO: Write SteamWebBrowser subclass to be used with Qt
-        self.logger.debug('Init SteamWebBrowserCfg')
-        swb = SteamWebBrowserCfg() #TODO: SteamWebBrowserCfg init
-        if not swb.logged_in():
-            print('NOT LOGGED IN')
-            swb.login()
+        self.logger.debug('Init QSteamWebBrowser')
+        swb = QSteamWebBrowser(
+                username=self.settings.value('steam/username'),
+                password=self.steamPassword,
+                parent=self
+        )
+
         data_path = os.path.join(os.path.dirname(self.settings.fileName()), 'SteamIdle')
         self.logger.debug('Using data path: "%s"', data_path)
         self.sbb = SteamBadges(swb, data_path)

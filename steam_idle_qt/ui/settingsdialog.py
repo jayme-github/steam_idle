@@ -5,9 +5,11 @@ Module implementing SettingsDialog.
 """
 import logging
 from PyQt4.QtCore import pyqtSlot, QSettings
-from PyQt4.QtGui import QDialog
+from PyQt4.QtGui import QDialog, QDialogButtonBox
 
 from .Ui_settings import Ui_Dialog, _translate
+from steam_idle_qt.QSteamWebBrowser import QSteamWebBrowser
+from steamweb.steamwebbrowser import IncorrectLoginError
 
 class SettingsDialog(QDialog, Ui_Dialog):
     """
@@ -22,6 +24,8 @@ class SettingsDialog(QDialog, Ui_Dialog):
         super().__init__(parent)
         self.logger = logging.getLogger('.'.join((__name__, self.__class__.__name__)))
         self.setupUi(self)
+        self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
+        self.credentialsOK = False
         self.readSettings()
 
     @property
@@ -36,22 +40,37 @@ class SettingsDialog(QDialog, Ui_Dialog):
         self.comboBoxAutostart.setCurrentIndex(
             self.comboBoxAutostart.findText(settings.value('autostart', 'None'))
         )
+        # Check credentials if we know username and password
+        self.checkSteamCredentials(lazy=True)
 
     def writeSettings(self):
         settings = self.settings
         settings.setValue('steam/username', self.lineEditUsername.text())
         if self.checkBoxStorePassword.isChecked():
+            # Store password in config
+            # FIXME: use keystore
             settings.setValue('steam/password', self.lineEditPassword.text())
+        else:
+            # Store password in mainwindow variable
+            self.parent._steamPassword = self.lineEditPassword.text()
         settings.setValue('steam/storepassword', self.checkBoxStorePassword.isChecked())
         settings.setValue('autostart', self.comboBoxAutostart.currentText())
 
+    def setGreenMsg(self, msg):
+        self.labelStatus.setStyleSheet('color: green')
+        self.logger.debug('setRedMsg(%s)' % msg)
+        self.labelStatus.setText(msg)
+
+    def setRedMsg(self, msg):
+        self.labelStatus.setStyleSheet('color: red')
+        self.logger.debug('setRedMsg(%s)' % msg)
+        self.labelStatus.setText(msg)
+
     def setConnectedStatus(self, status):
         if status == True:
-            self.labelStatus.setStyleSheet('color: green')
-            self.labelStatus.setText(_translate('Dialog', 'Connected', None))
+            self.setGreenMsg(_translate('Dialog', 'Connected', None))
         else:
-            self.labelStatus.setStyleSheet('color: red')
-            self.labelStatus.setText(_translate('Dialog', 'Not connected', None))
+            self.setRedMsg(_translate('Dialog', 'Not connected', None))
 
     def accept(self):
         self.logger.debug('acceppt slot')
@@ -66,45 +85,77 @@ class SettingsDialog(QDialog, Ui_Dialog):
             return
         self.lineEditPassword.setStyleSheet('')
 
-        if self.checkSteamCredentials():
+        if self.credentialsOK or self.checkSteamCredentials():
             self.writeSettings()
             super().accept()
-#
-#    @pyqtSlot()
-#    def on_buttonBox_accepted(self):
-#        pass
+        else:
+            self.logger.debug('credential check failed...don\'t accept dialog')
 
-#    @pyqtSlot()
-#    def on_buttonBox_rejected(self):
-#        """
-#        Slot documentation goes here.
-#        """
-#        # TODO: not implemented yet
-#        raise NotImplementedError
+    def checkSteamCredentials(self, lazy=False):
+        username = self.lineEditUsername.text()
+        password = self.lineEditPassword.text()
+        self.credentialsOK = False
+        if username and password:
+            self.logger.info('Try to login with username: "%s"', username)
+            swb = QSteamWebBrowser(
+                    username=username,
+                    password=password,
+                    parent=self
+            )
+            if lazy and swb.logged_in():
+                self.logger.info('Looks like we already have a cookie for account "%s"', username)
+                self.credentialsOK = True
+                self.setGreenMsg(_translate('Dialog', 'Connected (SteamID %s)' % swb.steamid, None))
+            else:
+                try:
+                    steamid = swb.login()
+                    if steamid:
+                        self.credentialsOK = True
+                        self.setGreenMsg(_translate('Dialog', 'Connected (SteamID %s)' % steamid, None))
+                except IncorrectLoginError:
+                    self.logger.exception('IncorrectLogin')
+                    self.setRedMsg(_translate('Dialog', 'Incorrect login', None))
+                    self.credentialsOK = False
+        else:
+            self.setConnectedStatus(self.credentialsOK)
 
-    def checkSteamCredentials(self):
-        if self.lineEditUsername.text() and self.lineEditPassword.text():
-            self.logger.info('Try to connect to steam')
-            # TODO: implement credential check
-            self.setConnectedStatus(True)
-            return True
-        self.setConnectedStatus(False)
-        return False
+        self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(self.credentialsOK)
+        return self.credentialsOK
 
     @pyqtSlot()
-    def on_lineEditUsername_lostFocus(self):
+    def on_lineEditUsername_editingFinished(self):
+        self.logger.debug('on_lineEditUsername_editingFinished')
         if self.lineEditUsername.text():
             self.lineEditUsername.setStyleSheet('')
-            self.checkSteamCredentials()
+            #self.checkSteamCredentials()
         else:
             self.lineEditUsername.setStyleSheet('QLineEdit { background-color: #f6989d }')
 
     @pyqtSlot()
-    def on_lineEditPassword_lostFocus(self):
+    def on_lineEditPassword_editingFinished(self):
+        self.logger.debug('on_lineEditPassword_editingFinished')
         if self.lineEditPassword.text():
             self.lineEditPassword.setStyleSheet('')
-            self.checkSteamCredentials()
+            #self.checkSteamCredentials()
         else:
             self.lineEditPassword.setStyleSheet('QLineEdit { background-color: #f6989d }')
 
+    @pyqtSlot('QString')
+    def on_lineEditUsername_textEdited(self, text):
+        self.logger.debug('on_lineEditUsername_textEdited')
+        self.credentialsOK = False
+        self.setConnectedStatus(self.credentialsOK)
+        if self.lineEditUsername.text() and self.lineEditPassword.text():
+            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(True)
+        else:
+            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
 
+    @pyqtSlot('QString')
+    def on_lineEditPassword_textEdited(self, text):
+        self.logger.debug('on_lineEditPassword_textEdited')
+        self.credentialsOK = False
+        self.setConnectedStatus(self.credentialsOK)
+        if self.lineEditUsername.text() and self.lineEditPassword.text():
+            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(True)
+        else:
+            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
