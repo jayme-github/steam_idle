@@ -224,7 +224,7 @@ class SteamBadges(object):
     def get_apps(self,appid_filter=[]):
         ''' Parse the badge pages, add app info (like name and icon) if needed
             fetch and store the icons and cache app info in shelve.
-            Return all apps on badges page (with and without remaining drops).
+            Return a dict of all apps on badges page (with and without remaining drops).
         '''
         apps = self.parse_badges_pages(appid_filter)
         #apps = mockSome()

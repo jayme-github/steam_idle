@@ -212,10 +212,10 @@
    <addaction name="actionRefresh"/>
    <addaction name="actionShowAll"/>
    <addaction name="separator"/>
-   <addaction name="actionStartStop"/>
+   <addaction name="actionStartStopIdle"/>
    <addaction name="actionNext"/>
    <addaction name="separator"/>
-   <addaction name="actionMultiIdle"/>
+   <addaction name="actionStartStopMultiIdle"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
   <action name="actionQuit">
@@ -254,7 +254,7 @@
     <string>F5</string>
    </property>
   </action>
-  <action name="actionStartStop">
+  <action name="actionStartStopIdle">
    <property name="enabled">
     <bool>false</bool>
    </property>
@@ -264,7 +264,7 @@
     </iconset>
    </property>
    <property name="text">
-    <string>&amp;Start</string>
+    <string>&amp;Start Idle</string>
    </property>
    <property name="toolTip">
     <string>Start ideling</string>
@@ -302,7 +302,7 @@
     <string>Show all apps (with and without remaining drops)</string>
    </property>
   </action>
-  <action name="actionMultiIdle">
+  <action name="actionStartStopMultiIdle">
    <property name="enabled">
     <bool>false</bool>
    </property>
