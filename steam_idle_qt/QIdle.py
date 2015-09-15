@@ -145,7 +145,7 @@ class MultiIdle(BaseIdle):
             self.logger.debug('doStartIdle: started %s' %p)
             if len(self.idleChilds) < len(apps):
                 # Steam client will crash if childs spawn too fast
-                sleep(1)
+                sleep(0.25)
         self._idle()
 
     @pyqtSlot()
