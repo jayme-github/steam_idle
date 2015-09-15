@@ -87,8 +87,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def checkSteamRunning(self):
         if steam_api.IsSteamRunning():
             self.logger.debug('Steam client is running')
-            self._checkSteamRunningTimer.stop()
-            self._checkSteamRunningTimer = None
+            if self._checkSteamRunningTimer != None:
+                self._checkSteamRunningTimer.stop()
+                self._checkSteamRunningTimer = None
             self.labelSteamNotRunning.hide()
             self.actionStartStop.setEnabled(True) #TODO: Check if actionStartStop is to be enabled
             self.actionMultiIdle.setEnabled(True) #TODO: Check if actionMultiIdle is to be enabled
@@ -214,6 +215,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Enable nextAction (if more than one app to idle)
         if self.totalGamesToIdle > 1 and self.continueToNext:
             self.actionNext.setEnabled(True)
+        self.actionMultiIdle.setEnabled(False)
         self._post_startIdle()
 
     def startMultiIdle(self):
@@ -223,15 +225,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         QMetaObject.invokeMethod(self._multiIdleInstance, 'doStartIdle', Qt.QueuedConnection,
                                     Q_ARG(list, self.activeApps))
         self.actionNext.setEnabled(False)
+        self.actionStartStop.setEnabled(False)
         self._post_startIdle()
 
     def _post_startIdle(self):
         ''' Update UI stuff (icons, table etc.) after starting idle '''
-        self.actionMultiIdle.setEnabled(False) # One can't change multi-idle during idle
         # Switch to stop icon/text
-        self.actionStartStop.setText(_translate("MainWindow", '&Stop', None))
-        self.actionStartStop.setToolTip(_translate("MainWindow", 'Stop ideling', None))
-        self.actionStartStop.setIcon(QIcon.fromTheme(_fromUtf8('media-playback-stop')))
+        if len(self.activeApps) > 1:
+            # MultiIdle
+            self.actionMultiIdle.setText(_translate("MainWindow", 'Stop &MultiIdle', None))
+            self.actionMultiIdle.setToolTip(_translate("MainWindow", 'Stop MultiIdle', None))
+            self.actionMultiIdle.setIcon(QIcon.fromTheme(_fromUtf8('media-playback-stop')))
+        else:
+            # Idle
+            self.actionStartStop.setText(_translate("MainWindow", '&Stop', None))
+            self.actionStartStop.setToolTip(_translate("MainWindow", 'Stop ideling', None))
+            self.actionStartStop.setIcon(QIcon.fromTheme(_fromUtf8('media-playback-stop')))
+
         # Update statusCell(s)
         for app in self.activeApps:
             self.tableWidgetGames.item(
@@ -257,11 +267,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.stopProgressBar()
         # Disable nextAction
         self.actionNext.setEnabled(False)
+
         # Switch to start icon/text
+        self.actionMultiIdle.setText(_translate("MainWindow", 'Start &MultiIdle', None))
+        self.actionMultiIdle.setToolTip(_translate("MainWindow", 'Start parallel idle of all games in refund period', None))
+        self.actionMultiIdle.setIcon(QIcon.fromTheme(_fromUtf8('media-playback-start')))
+
         self.actionStartStop.setText(_translate("MainWindow", '&Start', None))
         self.actionStartStop.setToolTip(_translate("MainWindow", 'Start ideling', None))
         self.actionStartStop.setIcon(QIcon.fromTheme(_fromUtf8('media-playback-start')))
-        self.on_actionRefresh_triggered() #Update data
+
+        # Update data
+        self.on_actionRefresh_triggered()
 
     def rowIdForAppId(self, appid):
         ''' Returns the rowId that contains appid or -1 if it was not found
@@ -384,24 +401,27 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
             # Leave actions untuched if idle is running
             if not self.activeApps:
-                # Enable actionStartStop if there are apps to idle
-                if len(self.apps) > 0:
-                    self.actionStartStop.setEnabled(True)
-
-                # Enable/Disable actionMultiIdle
-                if self.gamesInRefundPeriod >= 2:
-                    # Enable and check by default
-                    # TODO: Configuration item for multi-idle as default
-                    self.actionMultiIdle.setChecked(True)
-                    self.actionMultiIdle.setEnabled(True)
-                else:
-                    # Not enough apps for multi-idle, uncheck and disable
-                    self.actionMultiIdle.setChecked(False)
-                    self.actionMultiIdle.setEnabled(False)
+                self.toggle_actionStartStop()
+                self.toggle_actionMultiIdle()
 
         # Done, stop progressBar if it was updates for this refresh
         if self.labelStatusBar.text() == 'Loading data from Steam...':
             self.stopProgressBar()
+
+    def toggle_actionStartStop(self):
+        # Enable actionStartStop if there are apps to idle
+        if len(self.apps) > 0:
+            self.actionStartStop.setEnabled(True)
+        else:
+            self.actionStartStop.setEnabled(False)
+
+    def toggle_actionMultiIdle(self):
+        # Enable/Disable actionMultiIdle
+        if self.gamesInRefundPeriod >= 2:
+            self.actionMultiIdle.setEnabled(True)
+        else:
+            # Not enough apps for multi-idle, disable
+            self.actionMultiIdle.setEnabled(False)
 
     def cleanUp(self):
         if len(self.activeApps) == 1:
@@ -453,13 +473,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.stopMultiIdle()
         else:
             # Nothing is running
-            if self.actionMultiIdle.isChecked():
-                # Start Multi-Idleif enabled
-                self.logger.debug('start multiidle')
-                self.startMultiIdle()
-            else:
-                # Start with the first app in table
-                self.startIdle(self.nextAppWithDrops())
+            # Start with the first app in table
+            self.startIdle(self.nextAppWithDrops())
 
     @pyqtSlot()
     def on_actionRefresh_triggered(self):
@@ -544,3 +559,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot()
     def on_actionSettings_triggered(self):
         self.showSettings()
+
+    @pyqtSlot()
+    def on_actionMultiIdle_triggered(self):
+        if len(self.activeApps) == 1:
+            # Something is running, stop
+            self.stopIdle()
+        elif len(self.activeApps) > 1:
+            # Stop Multi-Idleif enabled
+            self.stopMultiIdle()
+        else:
+            # Nothing is running
+            # Start with the first app in table
+            # Start Multi-Idleif enabled
+            self.logger.debug('start multiidle')
+            self.startMultiIdle()
+

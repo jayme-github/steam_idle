@@ -214,6 +214,7 @@
    <addaction name="separator"/>
    <addaction name="actionStartStop"/>
    <addaction name="actionNext"/>
+   <addaction name="separator"/>
    <addaction name="actionMultiIdle"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
@@ -302,22 +303,19 @@
    </property>
   </action>
   <action name="actionMultiIdle">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
    <property name="enabled">
     <bool>false</bool>
    </property>
    <property name="icon">
-    <iconset theme="utilities-terminal">
+    <iconset theme="media-playback-start">
      <normaloff/>
     </iconset>
    </property>
    <property name="text">
-    <string>Multi-Idle</string>
+    <string>Start &amp;Multi-Idle</string>
    </property>
    <property name="toolTip">
-    <string>Idle all games with less than 2 hour playtime in parallel first</string>
+    <string>Start parallel idle of all games in refund period</string>
    </property>
   </action>
  </widget>
