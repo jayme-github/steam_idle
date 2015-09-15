@@ -1,36 +1,24 @@
 # -*- coding: utf-8 -*-
 
-"""
-Module implementing CaptchaDialog.
-"""
-
-#from PyQt4.QtCore import pyqtSlot
-from PyQt4.QtGui import QDialog, QImage, QPixmap
+from PyQt4.QtCore import pyqtSlot
+from PyQt4.QtGui import QDialog, QImage, QPixmap, QDialogButtonBox
 
 from .Ui_captcha import Ui_Dialog
 
 class CaptchaDialog(QDialog, Ui_Dialog):
-    """
-    Class documentation goes here.
-    """
     def __init__(self, image_data, parent=None):
-        """
-        Constructor
-
-        @param parent reference to the parent widget (QWidget)
-        """
         super().__init__(parent)
         self.setupUi(self)
         captchaImage = QImage.fromData(image_data, 'PNG')
         self.labelCaptchaImage.setPixmap(QPixmap.fromImage(captchaImage))
+        self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
 
-#    @pyqtSlot()
-#    def on_buttonBox_accepted(self):
-#        """
-#        Slot documentation goes here.
-#        """
-#        # TODO: not implemented yet
-#        raise NotImplementedError
+    @pyqtSlot('QString')
+    def on_lineEditCaptchaText_textEdited(self, text):
+        if len(text) == 6:
+            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(True)
+        else:
+            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
 
 if __name__ == "__main__":
     import sys, random
