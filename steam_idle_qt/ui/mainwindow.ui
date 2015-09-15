@@ -106,6 +106,22 @@
            </widget>
           </item>
           <item>
+           <widget class="QLabel" name="labelSteamNotRunning">
+            <property name="font">
+             <font>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">color: red</string>
+            </property>
+            <property name="text">
+             <string>Steam client is not running.&lt;br/&gt;Please (re)start Steam.</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <spacer name="verticalSpacer">
             <property name="orientation">
              <enum>Qt::Vertical</enum>

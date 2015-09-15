@@ -13,6 +13,7 @@ from .settingsdialog import SettingsDialog
 from steam_idle_qt.QSteamWebBrowser import QSteamWebBrowser
 from steam_idle_qt.QIdle import Idle, MultiIdle
 from steam_idle.page_parser import SteamBadges, App
+from steam_idle import steam_api
 
 class ParseApps(QThread):
     steamDataReady = pyqtSignal(dict)
@@ -37,6 +38,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     _multiIdleThread = None
     _threadParseApps = None
     _steamPassword = None
+    _checkSteamRunningTimer = None
 
     def __init__(self, parent=None):
         """
@@ -52,6 +54,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.labelTotalGamesToIdle.hide()
         self.labelTotalGamesInRefund.hide()
         self.labelTotalRemainingDrops.hide()
+        self.labelSteamNotRunning.hide()
         self.statusBar.setMaximumHeight(20)
         self.progressBar = QProgressBar(self)
         self.progressBar.setRange(0,1)
@@ -69,6 +72,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Restore settings
         self.readSettings()
 
+        self.checkSteamRunning()
+
         if not os.path.exists(self.settings.fileName()) or self.settings.value('steam/password', None) == None:
             # Init Settings and/or ask for password
             self.showSettings()
@@ -78,6 +83,27 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # All slower init work is launched via singleShot timer so the UI is displayed immediately
             QTimer.singleShot(50, self.slowInit) # 100 msec seems delays slowInit for too long
             self.logger.debug('initDone signal sent')
+
+    def checkSteamRunning(self):
+        if steam_api.IsSteamRunning():
+            self.logger.debug('Steam client is running')
+            self._checkSteamRunningTimer.stop()
+            self._checkSteamRunningTimer = None
+            self.labelSteamNotRunning.hide()
+            self.actionStartStop.setEnabled(True) #TODO: Check if actionStartStop is to be enabled
+            self.actionMultiIdle.setEnabled(True) #TODO: Check if actionMultiIdle is to be enabled
+        else:
+            self.logger.warning('Steam client is not running')
+            self.labelSteamNotRunning.show()
+            self.actionStartStop.setEnabled(False)
+            self.actionNext.setEnabled(False)
+            self.actionMultiIdle.setEnabled(False)
+
+            if not self._checkSteamRunningTimer:
+                self.logger.debug('Setting up timer')
+                self._checkSteamRunningTimer = QTimer()
+                self._checkSteamRunningTimer.timeout.connect(self.checkSteamRunning)
+                self._checkSteamRunningTimer.start(15*1000)
 
     @property
     def settings(self):
@@ -252,6 +278,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         ''' Return the next app with remaining drops or None'''
         for rowId in range(startAt, self.tableWidgetGames.rowCount()):
             app = self.tableWidgetGames.item(rowId, 1).data(Qt.UserRole)
+            self.logger.debug('%d: %s', rowId, str(app))
             if app.remainingDrops > 0:
                 return app
         return None
