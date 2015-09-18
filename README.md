@@ -16,7 +16,7 @@ Usage
 
 I've only tested this with 64bit Linux so please report problems/bugs.
 
-There is NO GUI as of now!
+See [qt branch](https://github.com/jayme-github/steam_idle/tree/qt) for a GUI version (beta) using Qt4.
 
 License
 -------
