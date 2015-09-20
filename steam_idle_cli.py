@@ -32,8 +32,10 @@ def main_idle(apps):
             p = IdleChild(app)
             p.start()
             processes.append((endtime, p))
+            if args.verbose:
+                print(p.name)
             # Steam client will crash if childs spawn too fast; Fixes #1
-            sleep(1)
+            sleep(0.25)
         if args.verbose:
             print('Multi-Idling %d apps' % len(processes))
 
@@ -63,7 +65,7 @@ def main_idle(apps):
 
         if processes:
             # Multi-Idled some apps, update values as they will have changed
-            apps = [app for app in sbb.parse_badges_pages().values() if app.remainingDrops > 0]
+            apps = [app for app in sbb.get_apps(fetch_images=False).values() if app.remainingDrops > 0]
             # If there are still apps with < 2.0h play time, restart
             if [app for app in apps if app.playTime < 2.0] > 1:
                 print('There are still apps within refund time, restarting multi-idle')
@@ -80,8 +82,8 @@ def main_idle(apps):
         p.start()
         while app.remainingDrops > 0:
             delay = calc_delay(app.remainingDrops, app.playTime)
-            print('%d has %d remaining drops: Idling for %s (\'till %s)' % (
-                    app.appid,
+            print('"%s" has %d remaining drops: Idling for %s (\'till %s)' % (
+                    app.name,
                     app.remainingDrops,
                     strfsec(delay),
                     (datetime.now() + timedelta(seconds=delay)).strftime('%c')
@@ -89,9 +91,9 @@ def main_idle(apps):
             idletime += r_sleep(delay)
 
             # Re check for remainingDrops and new apps
-            for a in sbb.parse_badges_pages().values():
+            for a in sbb.get_apps(fetch_images=False).values():
                 if not [x for x in apps + new_apps if x.appid == a.appid]:
-                    print('Found a new app to idle: %d has %d remaining drops, play time till now: %0.1f hours' % (a[0], a[1], a[2]))
+                    print('Found a new app to idle: "%s" has %d remaining drops, play time till now: %0.1f hours' % (a.name, a.remainingDrops, a.playTime))
                     if a.playTime >= 2.0:
                         # Already out of refund time, add to the one by one idle list
                         apps.append(a)
@@ -114,7 +116,7 @@ def main_idle(apps):
         print('Found %d new apps that need "refund-idle":' %(len(new_apps),))
         if args.verbose:
             for app in new_apps:
-                print('%d has %d remaining drops, play time till now: %0.1f hours' % (app.appid, app.remainingDrops, app.playTime))
+                print('"%s" has %d remaining drops, play time till now: %0.1f hours' % (app.name, app.remainingDrops, app.playTime))
         return main_idle(new_apps)
 
 if __name__ == '__main__':
@@ -148,12 +150,12 @@ if __name__ == '__main__':
             print('Please start your Steam Client.')
             sys.exit(1)
 
-    apps = [app for app in sbb.parse_badges_pages().values() if app.remainingDrops > 0]
+    apps = [app for app in sbb.get_apps(fetch_images=False).values() if app.remainingDrops > 0]
 
     print('%d games with a total of %d card drops left:' % (len(apps), sum([app.remainingDrops for app in apps])))
     if args.verbose or args.list:
         for app in apps:
-            print('%d has %d remaining drops, play time till now: %0.1f hours' % (app.appid, app.remainingDrops, app.playTime))
+            print('"%s" has %d remaining drops, play time till now: %0.1f hours' % (app.name, app.remainingDrops, app.playTime))
     if args.list:
         sys.exit(0)
 

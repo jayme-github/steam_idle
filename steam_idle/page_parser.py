@@ -70,7 +70,7 @@ def mockSome():
     return apps
 
 
-def fetch_images(job):
+def fetch_images_worker(job):
     ''' Multiprocessing worker function to fetch and store icon and logo for an app
         Will run in multiprocessing.Pool
     '''
@@ -99,8 +99,11 @@ class SteamBadges(object):
     def __init__(self, swb, data_path=''):
         self.logger = logging.getLogger('.'.join((__name__, self.__class__.__name__)))
         self.swb = swb
-        # Setup data path NOTE: may use swb.appdata_path
-        self.data_path = data_path
+        if data_path != '':
+            self.data_path = data_path
+        else:
+            self.data_path = swb.appdata_path
+        self.logger.info('Using "%s" as data path', self.data_path)
         self.shelve_path = os.path.join(self.data_path, 'cache')
         self.image_path = os.path.join(self.data_path, 'images')
         if not os.path.exists(self.image_path):
@@ -220,7 +223,7 @@ class SteamBadges(object):
             if os.path.exists(imagepath):
                 os.unlink(imagepath)
 
-    def get_apps(self,appid_filter=[]):
+    def get_apps(self, appid_filter=[], fetch_images=True):
         ''' Parse the badge pages, add app info (like name and icon) if needed
             fetch and store the icons and cache app info in shelve.
             Return a dict of all apps on badges page (with and without remaining drops).
@@ -254,13 +257,17 @@ class SteamBadges(object):
                 appinfos.extend(ainfo)
                 self.logger.debug('GetAppInfo returned data for %d appids:', len(ainfo))
 
-            # Retrieve and store icon and logosmall
-            pool_size = multiprocessing.cpu_count() * 2
-            pool = multiprocessing.Pool(processes=pool_size)
-            pool_jobs = [(appinfo, self.image_path) for appinfo in appinfos]
-            pool_outputs = pool.map(fetch_images, pool_jobs)
-            pool.close()
-            pool.join()
+            if fetch_images == True:
+                # Retrieve and store icon and logosmall
+                pool_size = multiprocessing.cpu_count() * 2
+                pool = multiprocessing.Pool(processes=pool_size)
+                pool_jobs = [(appinfo, self.image_path) for appinfo in appinfos]
+                pool_outputs = pool.map(fetch_images_worker, pool_jobs)
+                pool.close()
+                pool.join()
+            else:
+                # Just get names
+                pool_outputs = [(appinfo.get('appid'), appinfo.get('name')) for appinfo in appinfos]
 
             # Merge new data with data from shelve and store new values
             for appid, name in pool_outputs:

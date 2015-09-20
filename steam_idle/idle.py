@@ -15,25 +15,20 @@ class IdleChild(multiprocessing.Process):
     def __init__(self, app):
         super(IdleChild, self).__init__()
         self.app = app
-        self.name += '-[%s]' % str(self.app.name)
+        self.name += '-[%s]' % str(self.app.name if self.app.name else self.app.appid)
 
     def run(self):
         os.environ['SteamAppId'] = str(self.app.appid)
-        p = multiprocessing.current_process()
-        me = '%s(%d):' % (p.name, p.pid)
-
         self.redirect_streams()
         try:
             steam_api.SteamAPI_Init()
             self.restore_streams()
         except:
             self.restore_streams()
-            print(me, "Couldn't initialize Steam API")
+            p = multiprocessing.current_process()
+            print('%s(%d): Couldn\'t initialize Steam API' % (p.name, p.pid))
             sys.stdout.flush()
             return
-
-        print(me, 'Ideling appid %d' % (self.app.appid,))
-        sys.stdout.flush()
 
         while True:
             sleep(1)
