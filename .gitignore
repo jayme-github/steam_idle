@@ -43,4 +43,3 @@ steam-idle.pid
 *.e4p
 .eric5project
 .ropeproject
-Ui_*.py
