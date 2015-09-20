@@ -558,7 +558,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.stopMultiIdle()
 
         app = self.tableWidgetGames.item(row, 1).data(Qt.UserRole)
-        self.logger.debug('startign idle on cell click request: ', str(app))
+        self.logger.debug('startign idle on cell click request: %s', str(app))
         self.startIdle(app)
 
     @pyqtSlot()
