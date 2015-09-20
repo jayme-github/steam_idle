@@ -31,7 +31,7 @@ class App(object):
     def __init__(self, image_path=''):
         self.image_path = image_path
     def __repr__(self):
-        return '<[%8d] "%s" (%d, %.1f)>' % (
+        return '<[%6d] "%s" (%d, %.1f)>' % (
             self.appid or 0,
             self.name or 'Unknown app',
             -1 if self.remainingDrops == None else self.remainingDrops,

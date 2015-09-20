@@ -17,7 +17,6 @@ class BaseIdle(QObject):
         self.logger = logging.getLogger('.'.join((__name__, self.__class__.__name__)))
 
     def _stopTimer(self):
-        self.logger.debug('_stopTimer called')
         if self.idleTimer:
             self.logger.debug('Stopping timer')
             self.idleTimer.stop()

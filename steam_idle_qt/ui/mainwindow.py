@@ -24,7 +24,7 @@ class ParseApps(QThread):
         logger = logging.getLogger('.'.join((__name__, self.__class__.__name__)))
         logger.info('Updating apps from steam')
         apps = self.sbb.get_apps()
-        logger.debug('ParseApps: {}'.format(apps))
+        logger.debug('ParseApps: {} apps'.format(len(apps)))
         self.steamDataReady.emit(apps)
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -33,7 +33,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     """
     apps = {}
     activeApps = [] # List of app instances currently ideling
-    continueToNext = True
     totalGamesToIdle = 0
     gamesInRefundPeriod = 0
     totalRemainingDrops = 0
@@ -216,7 +215,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         QMetaObject.invokeMethod(self._idleInstance, 'doStartIdle', Qt.QueuedConnection,
                                     Q_ARG(App, app))
         # Enable nextAction (if more than one app to idle)
-        if self.totalGamesToIdle > 1 and self.continueToNext:
+        if self.totalGamesToIdle > 1:
             self.actionNext.setEnabled(True)
         self.actionStartStopMultiIdle.setEnabled(False)
         self._post_startIdle()
@@ -298,7 +297,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         ''' Return the next app with remaining drops or None'''
         for rowId in range(startAt, self.tableWidgetGames.rowCount()):
             app = self.tableWidgetGames.item(rowId, 1).data(Qt.UserRole)
-            self.logger.debug('%d: %s', rowId, str(app))
+            self.logger.debug('(%d, %d): %s', rowId, self.tableWidgetGames.visualRow(rowId), str(app))
             if app.remainingDrops > 0:
                 return app
         return None
@@ -360,6 +359,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         ''' Update UI with data from steam
             will use the apps provided as parameter or self.apps
         '''
+        self.logger.debug('updateSteamData %s', 'with %d apps as parameter'%len(apps) if apps != None else '')
         if apps != None:
             self.apps = apps
 
@@ -466,9 +466,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @pyqtSlot()
     def on_actionStartStopIdle_triggered(self):
-        self.continueToNext = True
         if len(self.activeApps) == 1:
             # Something is running, stop
+            self.logger.debug('stop idle')
             self.stopIdle()
         elif len(self.activeApps) > 1:
             # Stop Multi-Idleif enabled
@@ -520,11 +520,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @pyqtSlot(App)
     def on_idleAppDone(self, app=None):
-        if not self.continueToNext:
-            self.stopIdle()
-
+        self.logger.debug('activeApps: "%s"' % self.activeApps)
         rowId = self.rowIdForAppId(self.activeApps[0].appid) # Assume there is only one active app as actionNext is disabled in MultiIdle
         nextApp = self.nextAppWithDrops(startAt=rowId+1)
+        self.logger.debug('nextApp: "%s"' % nextApp)
         if nextApp:
             # Update icon of old statusCell
             self.tableWidgetGames.item(rowId, 0).setIcon(QIcon())
@@ -536,6 +535,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.actionNext.setEnabled(False)
         else:
             # No row with this id: stop
+            self.logger.debug('No next app found. stop idle')
             self.stopIdle()
             self.updateSteamData() # This will update the table and enable/disable buttons as needed
 
@@ -550,13 +550,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def on_tableWidgetGames_cellDoubleClicked(self, row, column):
         if len(self.activeApps) == 1:
             # Stop currently ideling game
+            self.logger.debug('stop idle')
             self.stopIdle()
         elif len(self.activeApps) > 1:
             # Stop MultiIdle
+            self.logger.debug('stop multiidle')
             self.stopMultiIdle()
-        self.actionStartStopMultiIdle.setEnabled(False)
-        self.continueToNext = False # Don't continue to next app
+
         app = self.tableWidgetGames.item(row, 1).data(Qt.UserRole)
+        self.logger.debug('startign idle on cell click request: ', str(app))
         self.startIdle(app)
 
     @pyqtSlot()
@@ -567,9 +569,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def on_actionStartStopMultiIdle_triggered(self):
         if len(self.activeApps) == 1:
             # Something is running, stop
+            self.logger.debug('stop idle')
             self.stopIdle()
         elif len(self.activeApps) > 1:
             # Stop Multi-Idleif enabled
+            self.logger.debug('stop multiidle')
             self.stopMultiIdle()
         else:
             # Nothing is running
