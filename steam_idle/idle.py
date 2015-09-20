@@ -1,8 +1,7 @@
 import sys
 import os
 import multiprocessing
-from datetime import datetime, timedelta
-from math import ceil
+from datetime import timedelta
 from time import sleep
 from steam_idle import steam_api
 
@@ -82,36 +81,3 @@ def calc_delay(remainingDrops, playTime):
                 lastDelay -= 1
             sameDelay += 1
         return baseDelay + (lastDelay * 60) # Check every 5 minutes
-
-
-def multiIdle(apps):
-    # Idle all apps with playTime < 2h in parallel
-    processes = []
-    for appid, remainingDrops, playTime in [x for x in apps if x[2] < 2.0]:
-        delay = int((2.0 - playTime) * 60 * 60)
-        endtime = (datetime.now() + timedelta(seconds=delay))
-        p = IdleChild(appid)
-        p.start()
-        processes.append((endtime, p))
-
-    #FIXME Should be ordered, shortest idle first
-    for endtime, p in processes:
-        now = datetime.now()
-        if endtime < now:
-            print(p, 'endtime (%s) is in the past, shutting down' % (endtime,))
-            p.shutdown()
-            p.join()
-            continue
-        diff = int(ceil((endtime - now).total_seconds()))
-        if diff <= 0:
-            print(p, 'diff (%s) is below 0, shutting down' % (diff,))
-            p.shutdown()
-            p.join()
-            continue
-        print('Sleeping for %s till %s' %(
-            strfsec(diff),
-            (datetime.now() + timedelta(seconds=diff)).strftime('%c')
-        ))
-        sleep(diff)
-        p.shutdown()
-        p.join()

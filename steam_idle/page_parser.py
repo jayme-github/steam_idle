@@ -133,11 +133,10 @@ class SteamBadges(object):
 
         return app
 
-    def parse_badges_pages(self, return_all=True, appid_filter=[]):
+    def parse_badges_pages(self, appid_filter=[]):
         ''' Iterates over all badges pages of a steam profile
             Parses all badges (using parse_badge()) to return the appId, play time ('till now) and the number of card drops left.
 
-            @param return_all also return apps that have no card drops left (mostly for testing)
             @param appid_filter only look for appids listed here
         '''
 
