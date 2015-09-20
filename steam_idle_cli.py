@@ -44,13 +44,13 @@ def main_idle(apps):
             now = datetime.now()
             if endtime < now:
                 print(p, 'endtime (%s) is in the past, shutting down' % (endtime,))
-                p.shutdown()
+                p.terminate()
                 p.join()
                 continue
             diff = int(ceil((endtime - now).total_seconds()))
             if diff <= 0:
                 print(p, 'diff (%s) is below 0, shutting down' % (diff,))
-                p.shutdown()
+                p.terminate()
                 p.join()
                 continue
             print('Sleeping for %s till %s' %(
@@ -60,7 +60,7 @@ def main_idle(apps):
             sleep(diff)
             if args.verbose:
                 print(p, 'Woke up, shutting down')
-            p.shutdown()
+            p.terminate()
             p.join()
 
         if processes:
@@ -92,7 +92,7 @@ def main_idle(apps):
 
             # Re check for remainingDrops and new apps
             for a in sbb.get_apps(fetch_images=False).values():
-                if not [x for x in apps + new_apps if x.appid == a.appid]:
+                if a.remainingDrops > 0 and not [x for x in apps + new_apps if x.appid == a.appid]:
                     print('Found a new app to idle: "%s" has %d remaining drops, play time till now: %0.1f hours' % (a.name, a.remainingDrops, a.playTime))
                     if a.playTime >= 2.0:
                         # Already out of refund time, add to the one by one idle list
@@ -108,7 +108,7 @@ def main_idle(apps):
             print('%d drops remaining, playtime is %0.1f' %(app.remainingDrops, app.playTime))
 
         # Stop idleing
-        p.shutdown()
+        p.terminate()
         p.join()
 
     if new_apps:
