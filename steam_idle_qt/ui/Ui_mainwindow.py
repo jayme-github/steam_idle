@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'mainwindow.ui'
+# Form implementation generated from reading ui file 'steam_idle_qt/ui/mainwindow.ui'
 #
 # Created by: PyQt4 UI code generator 4.11.4
 #
@@ -32,6 +32,7 @@ class Ui_MainWindow(object):
         self.verticalLayout = QtGui.QVBoxLayout(self.centralWidget)
         self.verticalLayout.setObjectName(_fromUtf8("verticalLayout"))
         self.tableWidgetGames = QtGui.QTableWidget(self.centralWidget)
+        self.tableWidgetGames.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.tableWidgetGames.setEditTriggers(QtGui.QAbstractItemView.NoEditTriggers)
         self.tableWidgetGames.setSelectionMode(QtGui.QAbstractItemView.SingleSelection)
         self.tableWidgetGames.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)

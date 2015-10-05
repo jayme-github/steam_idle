@@ -5,8 +5,9 @@ Module implementing MainWindow.
 """
 import os
 import logging
-from PyQt4.QtCore import pyqtSlot, Qt, QThread, pyqtSignal, QMetaObject, Q_ARG, QTimer, QSettings, QPoint, QSize
-from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressBar, QPixmap, QIcon, QHeaderView, QLabel, QDialog
+from itertools import chain
+from PyQt4.QtCore import pyqtSlot, Qt, QThread, pyqtSignal, QMetaObject, Q_ARG, QTimer, QSettings, QPoint, QSize, QUrl
+from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressBar, QPixmap, QIcon, QHeaderView, QLabel, QDialog, QMenu, QDesktopServices
 
 from .Ui_mainwindow import Ui_MainWindow, _fromUtf8, _translate
 from .settingsdialog import SettingsDialog
@@ -41,6 +42,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     _threadParseApps = None
     _steamPassword = None
     _checkSteamRunningTimer = None
+    steamDataUpdated = pyqtSignal()
 
     def __init__(self, parent=None):
         """
@@ -210,8 +212,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.progressBar.hide()
 
     def startIdle(self, app):
+        # make sure last idle child has stopped
+        if self._idleThread:
+            self._idleThread.quit()
+            self._idleThread.wait()
         self._idleThread.start()
         self.activeApps = [app]
+        self.logger.debug('activeApps: "%s"' % self.activeApps)
         QMetaObject.invokeMethod(self._idleInstance, 'doStartIdle', Qt.QueuedConnection,
                                     Q_ARG(App, app))
         # Enable nextAction (if more than one app to idle)
@@ -221,6 +228,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._post_startIdle()
 
     def startMultiIdle(self):
+        # make sure last idle child has stopped
+        if self._multiIdleThread:
+            self._multiIdleThread.quit()
+            self._multiIdleThread.wait()
         self._multiIdleThread.start()
         self.activeApps = [a for a in self.apps.values() if a.playTime < 2.0 and a.remainingDrops > 0]
         self.logger.debug('startMultiIdle for {} apps: {}'.format(len(self.activeApps), self.activeApps))
@@ -232,6 +243,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _post_startIdle(self):
         ''' Update UI stuff (icons, table etc.) after starting idle '''
+        self.logger.debug('activeApps: "%s"' % self.activeApps)
         # Switch to stop icon/text
         if len(self.activeApps) > 1:
             # MultiIdle
@@ -259,6 +271,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot()
     def _post_stopIdle(self):
         ''' Update UI stuff (icons, table etc.) after stopping idle '''
+        self.logger.debug('activeApps: "%s"' % self.activeApps)
         # Update statusCells
         for app in self.activeApps:
             self.tableWidgetGames.item(
@@ -294,9 +307,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         return matches[0].row() if matches else -1
 
     def nextAppWithDrops(self, startAt=0):
-        ''' Return the next app with remaining drops or None'''
-        for rowId in range(startAt, self.tableWidgetGames.rowCount()):
-            app = self.tableWidgetGames.item(rowId, 1).data(Qt.UserRole)
+        ''' Return the next app with remaining drops or None
+            Will go from at index startAt to startAt -1 (e.g. starts from the begining is end is reached)
+        '''
+        for rowId in chain(range(startAt, self.tableWidgetGames.rowCount()), range(0, startAt)):
+            app = self.appInRow(rowId)
             self.logger.debug('(%d, %d): %s', rowId, self.tableWidgetGames.visualRow(rowId), str(app))
             if app.remainingDrops > 0:
                 return app
@@ -311,6 +326,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # If this app is ideling atm, add a icon
             if app in self.activeApps:
                 self.tableWidgetGames.item(rowId, 0).setIcon(QIcon.fromTheme(_fromUtf8('media-playback-start')))
+            # Update app instance in UserRole
+            self.tableWidgetGames.item(rowId, 1).setData(Qt.UserRole, app)
             # Remaining drops
             self.tableWidgetGames.item(rowId, 2).setData(Qt.EditRole, app.remainingDrops)
             # Playtime
@@ -359,7 +376,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         ''' Update UI with data from steam
             will use the apps provided as parameter or self.apps
         '''
-        self.logger.debug('updateSteamData %s', 'with %d apps as parameter'%len(apps) if apps != None else '')
+        self.logger.debug('updateSteamData with %d apps as parameter'% len(apps) if apps != None else 0)
         if apps != None:
             self.apps = apps
 
@@ -411,6 +428,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if self.labelStatusBar.text() == 'Loading data from Steam...':
             self.stopProgressBar()
 
+        self.steamDataUpdated.emit()
+
     def toggle_actionStartStopIdle(self):
         # Enable actionStartStopIdle if there are apps to idle
         if len(self.apps) > 0:
@@ -454,15 +473,36 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.cleanUp()
         event.accept()
 
+    def appInRow(self, rowId):
+        return self.tableWidgetGames.item(rowId, 1).data(Qt.UserRole)
+
     @pyqtSlot()
     def on_actionQuit_triggered(self):
         self.close()
 
     @pyqtSlot()
     def on_multiIdleFinished(self):
-        self.activeApps = []
-        self.updateSteamData() # This will disable actionStartStopMultiIdle etc.
-        self.on_actionStartStopIdle_triggered() # Start normal idle process
+        ''' Will be called when multiIdle has finished all games
+            Connect to the steamDataUpdated signal which will be emitted by:
+            _multiIdleInstance.finished
+             -> _post_stopIdle
+              -> on_actionRefresh_triggered
+               -> _threadParseApps.steamDataReady
+        '''
+        self.logger.debug('on_multiIdleFinished')
+        self.logger.debug('activeApps: "%s"' % self.activeApps)
+        if len(self.activeApps) > 0:
+            raise AssertionError('activeApps should be empty!')
+
+        def updateDone():
+            try:
+                self.steamDataUpdated.disconnect(updateDone)
+            except (TypeError, AttributeError):
+                pass
+            self.logger.debug('Calling startIdle')
+            self.startIdle(self.nextAppWithDrops())
+        # start idle for first app with drops as soon ad steam data is updated
+        self.steamDataUpdated.connect(updateDone)
 
     @pyqtSlot()
     def on_actionStartStopIdle_triggered(self):
@@ -487,8 +527,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @pyqtSlot('QModelIndex', 'QModelIndex')
     def on_tableWidgetGamesSelectionModel_currentRowChanged(self, current, previous):
-        gameCell = self.tableWidgetGames.item(current.row(), 1) # Get the gameCell of this row
-        app = gameCell.data(Qt.UserRole)
+        app = self.appInRow(current.row())
         if os.path.exists(app.header):
             headerPixmap = QPixmap(app.header)
         else:
@@ -521,19 +560,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot(App)
     def on_idleAppDone(self, app=None):
         self.logger.debug('activeApps: "%s"' % self.activeApps)
-        rowId = self.rowIdForAppId(self.activeApps[0].appid) # Assume there is only one active app as actionNext is disabled in MultiIdle
-        nextApp = self.nextAppWithDrops(startAt=rowId+1)
-        self.logger.debug('nextApp: "%s"' % nextApp)
-        if nextApp:
-            # Update icon of old statusCell
-            self.tableWidgetGames.item(rowId, 0).setIcon(QIcon())
+        nextApp = None
+        if len(self.activeApps) >= 1:
+            rowId = self.rowIdForAppId(self.activeApps[0].appid)
+            nextApp = self.nextAppWithDrops(startAt=rowId+1)
+            self.logger.debug('nextApp: "%s"' % nextApp)
+            if nextApp:
+                # Update icon of old statusCell
+                self.tableWidgetGames.item(rowId, 0).setIcon(QIcon())
 
-            # Load the next app into idle thread
-            self.startIdle(nextApp)
-            if rowId + 1 == self.tableWidgetGames.rowCount() - 1:
-                # This was the last app(/row), disable next button
-                self.actionNext.setEnabled(False)
-        else:
+                # Load the next app into idle thread
+                self.startIdle(nextApp)
+                if rowId + 1 == self.tableWidgetGames.rowCount() - 1:
+                    # FIXME: This was the last app(/row), disable next button
+                    self.actionNext.setEnabled(False)
+
+        if nextApp == None:
             # No row with this id: stop
             self.logger.debug('No next app found. stop idle')
             self.stopIdle()
@@ -541,6 +583,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @pyqtSlot(App)
     def on_multiIdleAppDone(self, app):
+        self.logger.debug('activeApps: "%s"', self.activeApps)
+        self.activeApps.remove(app)
+        self.logger.debug('activeApps: "%s"', self.activeApps)
         rowId = self.rowIdForAppId(app.appid)
         self.logger.debug('on_multiIdleAppDone, removing icon from row: %d' %rowId)
         self.tableWidgetGames.item(rowId, 0).setIcon(QIcon()) # Remove "running" icon from app
@@ -548,18 +593,30 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @pyqtSlot(int, int)
     def on_tableWidgetGames_cellDoubleClicked(self, row, column):
+        # FIXME: cellDoubleClicked left click only
+        def startClickedApp():
+            try:
+                self._idleThread.finished.disconnect(startClickedApp)
+                self._multiIdleThread.finished.disconnect(startClickedApp)
+            except (TypeError, AttributeError):
+                pass
+            app = self.appInRow(row)
+            self.logger.debug('startign idle on cell click request: %s', str(app))
+            self.startIdle(app)
+
         if len(self.activeApps) == 1:
             # Stop currently ideling game
             self.logger.debug('stop idle')
             self.stopIdle()
+            self._idleThread.finished.connect(startClickedApp)
         elif len(self.activeApps) > 1:
             # Stop MultiIdle
             self.logger.debug('stop multiidle')
             self.stopMultiIdle()
-
-        app = self.tableWidgetGames.item(row, 1).data(Qt.UserRole)
-        self.logger.debug('startign idle on cell click request: %s', str(app))
-        self.startIdle(app)
+            self._multiIdleThread.finished.connect(startClickedApp)
+        else:
+            # Nothing running
+            startClickedApp()
 
     @pyqtSlot()
     def on_actionSettings_triggered(self):
@@ -577,8 +634,50 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.stopMultiIdle()
         else:
             # Nothing is running
-            # Start with the first app in table
-            # Start Multi-Idleif enabled
+            # Start Multi-Idle if enabled
             self.logger.debug('start multiidle')
             self.startMultiIdle()
+
+    @pyqtSlot('QPoint')
+    def on_tableWidgetGames_customContextMenuRequested(self, pos):
+        idx = self.tableWidgetGames.indexAt(pos)
+        self.logger.debug('%s %s' %(idx.row(),idx.column()))
+        app = self.appInRow(idx.row())
+        self.logger.debug(str(app))
+
+        def startIdle():
+            self.logger.info('starting idle %s', app)
+            self.startIdle(app)
+
+        def stopIdle():
+            self.logger.info('stopping idle %s', app)
+            if len(self.activeApps) == 1:
+                # Something is running, stop
+                self.logger.debug('stop idle')
+                self.stopIdle()
+            elif len(self.activeApps) > 1:
+                # Stop Multi-Idleif enabled
+                self.logger.debug('stop multiidle')
+                self.stopMultiIdle()
+
+        def openBadgeProgress():
+            self.logger.info('Opening badge progress page for %s', app)
+            QDesktopServices.openUrl(QUrl('https://steamcommunity.com/my/gamecards/%d'%app.appid))
+
+        menu = QMenu(self)
+        if app in self.activeApps:
+            menu.addAction(QIcon.fromTheme(_fromUtf8('media-playback-stop')),
+                            'Stop idle',
+                            stopIdle)
+        else:
+            menu.addAction(QIcon.fromTheme(_fromUtf8('media-playback-start')),
+                            'Start idle',
+                            startIdle)
+        menu.addSeparator()
+        menu.addAction('Show badge progress', openBadgeProgress)
+        # TODO: Add to blacklist option
+        p = QPoint(pos)
+        p.setY(p.y() + menu.height())
+        where = self.tableWidgetGames.mapToGlobal(p)
+        menu.exec_(where)
 
