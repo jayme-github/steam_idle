@@ -12,11 +12,15 @@ Usage
 
 * Install [steamweb](https://github.com/jayme-github/steamweb)
 * Lauch Steam (and login)
-* Start `steam_idle.py`
+* Start `steam_idle_cli.py` for a command line interface
+
+GUI Usage
+-------
+* Install [steamweb](https://github.com/jayme-github/steamweb)
+* Install PyQt4
+* Start `steam_idle_gui.py` for a Qt4 GUI
 
 I've only tested this with 64bit Linux so please report problems/bugs.
-
-See [qt branch](https://github.com/jayme-github/steam_idle/tree/qt) for a GUI version (beta) using Qt4.
 
 License
 -------
