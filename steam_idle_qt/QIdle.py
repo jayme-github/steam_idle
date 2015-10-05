@@ -154,11 +154,13 @@ class MultiIdle(BaseIdle):
         try:
             p, endtime = sorted(self.idleChilds.items(), key=lambda x: x[1])[0]
         except IndexError:
+            self.logger.info('No childs left, emitting allDone and finished signal')
             # No childs left, all done
             self._stopTimer()
             self.allDone.emit()
             self.finished.emit()
         else:
+            # Emit statusUpdate signal
             self.statusUpdate.emit('Multi-Idle {} games, next update at {}'.format(
                 len(self.idleChilds),
                 endtime.strftime('%c'),
@@ -167,12 +169,12 @@ class MultiIdle(BaseIdle):
             now = datetime.now()
             diff = int(ceil((endtime - now).total_seconds()))
             if endtime < now:
-                self.logger.debug(p, 'endtime (%s) is in the past, shutting down' % (endtime,))
+                self.logger.debug('%s endtime (%s) is in the past, shutting down' % (p, endtime,))
                 self.appDone.emit(p.app)
                 self._stopChild(p)
                 self._idle()
             elif diff <= 0:
-                self.logger.debug(p, 'diff (%s) is below 0, shutting down' % (diff,))
+                self.logger.debug('%s diff (%s) is below 0, shutting down' % (p, diff,))
                 self.appDone.emit(p.app)
                 self._stopChild(p)
                 self._idle()
