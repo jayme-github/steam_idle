@@ -42,4 +42,4 @@ config.cfg
 steam-idle.pid
 *.e4p
 .eric5project
-Ui_*.py
+.ropeproject

@@ -1,0 +1,327 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>650</width>
+    <height>500</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Steam Idle</string>
+  </property>
+  <property name="locale">
+   <locale language="English" country="UnitedStates"/>
+  </property>
+  <widget class="QWidget" name="centralWidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <widget class="QTableWidget" name="tableWidgetGames">
+      <property name="contextMenuPolicy">
+       <enum>Qt::CustomContextMenu</enum>
+      </property>
+      <property name="editTriggers">
+       <set>QAbstractItemView::NoEditTriggers</set>
+      </property>
+      <property name="selectionMode">
+       <enum>QAbstractItemView::SingleSelection</enum>
+      </property>
+      <property name="selectionBehavior">
+       <enum>QAbstractItemView::SelectRows</enum>
+      </property>
+      <property name="sortingEnabled">
+       <bool>true</bool>
+      </property>
+      <attribute name="horizontalHeaderMinimumSectionSize">
+       <number>1</number>
+      </attribute>
+      <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
+       <bool>true</bool>
+      </attribute>
+      <attribute name="verticalHeaderVisible">
+       <bool>false</bool>
+      </attribute>
+      <column>
+       <property name="text">
+        <string notr="true"/>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Game</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Remaining drops</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Playtime</string>
+       </property>
+      </column>
+     </widget>
+    </item>
+    <item>
+     <widget class="QFrame" name="frame">
+      <property name="maximumSize">
+       <size>
+        <width>16777215</width>
+        <height>150</height>
+       </size>
+      </property>
+      <property name="frameShape">
+       <enum>QFrame::StyledPanel</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Raised</enum>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout">
+       <item>
+        <widget class="QWidget" name="widgetLeft" native="true">
+         <layout class="QVBoxLayout" name="verticalLayout_2">
+          <item>
+           <widget class="QLabel" name="labelTotalGamesToIdle">
+            <property name="text">
+             <string>games left to idle</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="labelTotalGamesInRefund">
+            <property name="text">
+             <string>in refund period (&lt;2h play time)</string>
+            </property>
+            <property name="indent">
+             <number>10</number>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="labelTotalRemainingDrops">
+            <property name="text">
+             <string>remaining card drops</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="labelSteamNotRunning">
+            <property name="font">
+             <font>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">color: red</string>
+            </property>
+            <property name="text">
+             <string>Steam client is not running.&lt;br/&gt;Please (re)start Steam.</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="verticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="horizontalSpacer">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>48</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="labelHeaderImage">
+         <property name="minimumSize">
+          <size>
+           <width>292</width>
+           <height>136</height>
+          </size>
+         </property>
+         <property name="baseSize">
+          <size>
+           <width>292</width>
+           <height>136</height>
+          </size>
+         </property>
+         <property name="text">
+          <string notr="true"/>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menuBar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>650</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>&amp;File</string>
+    </property>
+    <addaction name="actionSettings"/>
+    <addaction name="separator"/>
+    <addaction name="actionQuit"/>
+   </widget>
+   <addaction name="menuFile"/>
+  </widget>
+  <widget class="QToolBar" name="toolBar">
+   <property name="contextMenuPolicy">
+    <enum>Qt::DefaultContextMenu</enum>
+   </property>
+   <property name="windowTitle">
+    <string>Toolbar</string>
+   </property>
+   <property name="toolButtonStyle">
+    <enum>Qt::ToolButtonTextUnderIcon</enum>
+   </property>
+   <attribute name="toolBarArea">
+    <enum>TopToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+   <addaction name="actionRefresh"/>
+   <addaction name="actionShowAll"/>
+   <addaction name="separator"/>
+   <addaction name="actionStartStopIdle"/>
+   <addaction name="actionNext"/>
+   <addaction name="separator"/>
+   <addaction name="actionStartStopMultiIdle"/>
+  </widget>
+  <widget class="QStatusBar" name="statusBar"/>
+  <action name="actionQuit">
+   <property name="icon">
+    <iconset theme="application-exit">
+     <normaloff/>
+    </iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Quit</string>
+   </property>
+  </action>
+  <action name="actionSettings">
+   <property name="icon">
+    <iconset theme="preferences-other">
+     <normaloff/>
+    </iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Settings</string>
+   </property>
+  </action>
+  <action name="actionRefresh">
+   <property name="icon">
+    <iconset theme="view-refresh">
+     <normaloff/>
+    </iconset>
+   </property>
+   <property name="text">
+    <string>Refresh</string>
+   </property>
+   <property name="toolTip">
+    <string>Refresh/update the list of games, cards and playtime</string>
+   </property>
+   <property name="shortcut">
+    <string>F5</string>
+   </property>
+  </action>
+  <action name="actionStartStopIdle">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="media-playback-start">
+     <normaloff/>
+    </iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Start Idle</string>
+   </property>
+   <property name="toolTip">
+    <string>Start ideling</string>
+   </property>
+  </action>
+  <action name="actionNext">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="media-skip-forward">
+     <normaloff/>
+    </iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Next</string>
+   </property>
+   <property name="toolTip">
+    <string>Idle next game</string>
+   </property>
+  </action>
+  <action name="actionShowAll">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="folder-open">
+     <normaloff/>
+    </iconset>
+   </property>
+   <property name="text">
+    <string>Show all</string>
+   </property>
+   <property name="toolTip">
+    <string>Show all apps (with and without remaining drops)</string>
+   </property>
+  </action>
+  <action name="actionStartStopMultiIdle">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="media-playback-start">
+     <normaloff/>
+    </iconset>
+   </property>
+   <property name="text">
+    <string>Start &amp;Multi-Idle</string>
+   </property>
+   <property name="toolTip">
+    <string>Start parallel idle of all games in refund period</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
