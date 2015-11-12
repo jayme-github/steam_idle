@@ -6,15 +6,16 @@ from ctypes import CDLL, c_bool, c_void_p
 logger = logging.getLogger(__name__)
 
 try:
+    arch = ''
+    if sys.maxsize > 2**32:
+        arch = '64'
+
     if sys.platform.startswith('win'):
-        so = 'steam_api.dll'
+        so = 'steam_api%s.dll' %arch
+    elif sys.platform.startswith('linux'):
+        so = 'libsteam_api%s.so' %arch
     elif sys.platform.startswith('darwin'):
         so = 'libsteam_api.dylib'
-    elif sys.platform.startswith('linux'):
-        if sys.maxsize > 2**32:
-            so = 'libsteam_api_64.so'
-        else:
-            so = 'libsteam_api.so'
     else:
         logger.error('Unsupported operating system')
         raise EnvironmentError('Unsupported operating system')
