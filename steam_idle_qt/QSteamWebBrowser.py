@@ -1,7 +1,8 @@
 import os
+import stat
 from steamweb import SteamWebBrowser
 
-from PyQt4.QtCore import QObject, QSettings
+from PyQt4.QtCore import QObject, QSettings, QDir
 from PyQt4.QtGui import QInputDialog, QLineEdit
 from .ui.captchadialog import CaptchaDialog
 
@@ -11,7 +12,16 @@ class QSteamWebBrowser(SteamWebBrowser, QObject):
         self.parent = parent
         QObject.__init__(self, self.parent)
         # Set appdata path, this will end up in something like ~/.config/jayme-github/SteamIdle/
-        self._appdata_path = os.path.join(os.path.dirname(self.settings.fileName()), 'SteamIdle')
+        print(QDir.toNativeSeparators(self.settings.fileName()))
+        print(os.path.dirname(QDir.toNativeSeparators(self.settings.fileName())))
+        self._appdata_path = os.path.join(
+            os.path.dirname(QDir.toNativeSeparators(self.settings.fileName())),
+            'SteamIdle'
+        )
+        for p in (os.path.dirname(QDir.toNativeSeparators(self.settings.fileName())), self._appdata_path):
+            if not os.path.isdir(p):
+                os.mkdir(p, stat.S_IRWXU)
+        self.logger.debug('_appdata_path: "%s"', self._appdata_path)
         SteamWebBrowser.__init__(self, username=username, password=password)
 
     @property

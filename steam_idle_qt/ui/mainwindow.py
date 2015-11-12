@@ -6,7 +6,7 @@ Module implementing MainWindow.
 import os
 import logging
 from itertools import chain
-from PyQt4.QtCore import pyqtSlot, Qt, QThread, pyqtSignal, QMetaObject, Q_ARG, QTimer, QSettings, QPoint, QSize, QUrl
+from PyQt4.QtCore import pyqtSlot, Qt, QThread, QDir, pyqtSignal, QMetaObject, Q_ARG, QTimer, QSettings, QPoint, QSize, QUrl
 from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressBar, QPixmap, QIcon, QHeaderView, QLabel, QDialog, QMenu, QDesktopServices
 
 from .Ui_mainwindow import Ui_MainWindow, _fromUtf8, _translate
@@ -80,7 +80,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.checkSteamRunning()
 
-        if not os.path.exists(self.settings.fileName()) or self.settings.value('steam/password', None) == None:
+        if not os.path.exists(QDir.toNativeSeparators(self.settings.fileName())) or self.settings.value('steam/password', None) == None:
             # Init Settings and/or ask for password
             self.showSettings()
         else:
@@ -157,7 +157,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def readSettings(self):
         settings = self.settings
-        self.logger.debug('Reading settings from "%s"', settings.fileName())
+        self.logger.debug('Reading settings from "%s"',
+            QDir.toNativeSeparators(settings.fileName())
+        )
         pos = settings.value('pos', QPoint(200, 200))
         size = settings.value('size', QSize(650, 500))
         self.resize(size)
@@ -181,7 +183,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 parent=self
         )
 
-        data_path = os.path.join(os.path.dirname(self.settings.fileName()), 'SteamIdle')
+        data_path = os.path.join(
+            os.path.dirname(QDir.toNativeSeparators(self.settings.fileName())),
+            'SteamIdle'
+        )
         self.logger.debug('Using data path: "%s"', data_path)
         self.sbb = SteamBadges(swb, data_path)
 
