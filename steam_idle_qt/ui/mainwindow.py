@@ -42,6 +42,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     _threadParseApps = None
     _steamPassword = None
     _checkSteamRunningTimer = None
+    _init_done = False # True if initialization is completed (loaded data from steam etc.)
+    _startup = True # True on app start, set to false then init is done (and steam is running).
     steamDataUpdated = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -91,24 +93,43 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def checkSteamRunning(self):
         if steam_api.IsSteamRunning():
             self.logger.debug('Steam client is running')
-            if self._checkSteamRunningTimer != None:
-                self._checkSteamRunningTimer.stop()
-                self._checkSteamRunningTimer = None
             self.labelSteamNotRunning.hide()
             self.toggle_actionStartStopIdle()
             self.toggle_actionStartStopMultiIdle()
+
+            # Autostart
+            if self._init_done and self._startup:
+                self._startup = False
+                autostartMode = self.settings.value('autostart', 'None')
+                self.logger.info('autostartMode: "%s"', autostartMode)
+                if autostartMode == 'Multi-Idle':
+                    MIThreshold = self.settings.value('multiidlethreshold', 2, type=int)
+                    if self.gamesInRefundPeriod < MIThreshold:
+                        # Number of games in refund is below threshold, start normal idle
+                        self.logger.debug('Number of games in refund is below threshold, start normal idle')
+                        autostartMode = 'Idle'
+                    else:
+                        self.logger.debug('Autostart MultiIdle')
+                        self.on_actionStartStopMultiIdle_triggered()
+
+                if autostartMode == 'Idle':
+                    self.logger.debug('Autostart Idle')
+                    self.on_actionStartStopIdle_triggered()
+
         else:
             self.logger.warning('Steam client is not running')
+            # Stop Idle processes
             self.labelSteamNotRunning.show()
+            self.cleanUp()
             self.actionStartStopIdle.setEnabled(False)
             self.actionNext.setEnabled(False)
             self.actionStartStopMultiIdle.setEnabled(False)
 
-            if not self._checkSteamRunningTimer:
-                self.logger.debug('Setting up timer')
-                self._checkSteamRunningTimer = QTimer()
-                self._checkSteamRunningTimer.timeout.connect(self.checkSteamRunning)
-                self._checkSteamRunningTimer.start(15*1000)
+        if not self._checkSteamRunningTimer:
+            self.logger.debug('Setting up timer')
+            self._checkSteamRunningTimer = QTimer()
+            self._checkSteamRunningTimer.timeout.connect(self.checkSteamRunning)
+            self._checkSteamRunningTimer.start(15*1000)
 
     @property
     def settings(self):
@@ -190,6 +211,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         # Update the tableWidgetGames (e.g. start _threadParseApps)
         self.on_actionRefresh_triggered()
+
+        self._init_done = True
 
     @pyqtSlot(str)
     def on_idleStatusUpdate(self, msg):
@@ -377,6 +400,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             will use the apps provided as parameter or self.apps
         '''
         self.logger.debug('updateSteamData with %d apps as parameter'% len(apps) if apps != None else 0)
+
         if apps != None:
             self.apps = apps
 
@@ -446,6 +470,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.actionStartStopMultiIdle.setEnabled(False)
 
     def cleanUp(self):
+        if len(self.activeApps) == 0:
+            self.logger.debug('No cleanup needed')
+            return
+
         if len(self.activeApps) == 1:
             self.logger.debug('cleanUp: stopIdle()')
             # Something is running, stop
@@ -501,7 +529,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 pass
             self.logger.debug('Calling startIdle')
             self.startIdle(self.nextAppWithDrops())
-        # start idle for first app with drops as soon ad steam data is updated
+        # start idle for first app with drops as soon as steam data is updated
         self.steamDataUpdated.connect(updateDone)
 
     @pyqtSlot()

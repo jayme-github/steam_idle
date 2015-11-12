@@ -40,6 +40,7 @@ class SettingsDialog(QDialog, Ui_Dialog):
         self.comboBoxAutostart.setCurrentIndex(
             self.comboBoxAutostart.findText(settings.value('autostart', 'None'))
         )
+        self.spinBoxMultiIdleThreshold.setValue(settings.value('multiidlethreshold', 2, type=int))
         # Check credentials if we know username and password
         self.checkSteamCredentials(lazy=True)
 
@@ -55,16 +56,17 @@ class SettingsDialog(QDialog, Ui_Dialog):
             self.parent._steamPassword = self.lineEditPassword.text()
         settings.setValue('steam/storepassword', self.checkBoxStorePassword.isChecked())
         settings.setValue('autostart', self.comboBoxAutostart.currentText())
+        settings.setValue('multiidlethreshold', self.spinBoxMultiIdleThreshold.value())
 
     def setGreenMsg(self, msg):
-        self.labelStatus.setStyleSheet('color: green')
+        self.labelStatus_2.setStyleSheet('color: green')
         self.logger.debug('setRedMsg(%s)' % msg)
-        self.labelStatus.setText(msg)
+        self.labelStatus_2.setText(msg)
 
     def setRedMsg(self, msg):
-        self.labelStatus.setStyleSheet('color: red')
+        self.labelStatus_2.setStyleSheet('color: red')
         self.logger.debug('setRedMsg(%s)' % msg)
-        self.labelStatus.setText(msg)
+        self.labelStatus_2.setText(msg)
 
     def setConnectedStatus(self, status):
         if status == True:
