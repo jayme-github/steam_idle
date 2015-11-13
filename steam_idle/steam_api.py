@@ -4,6 +4,12 @@ import logging
 from ctypes import CDLL, c_bool, c_void_p
 
 logger = logging.getLogger(__name__)
+def module_path():
+    if hasattr(sys, 'frozen'):
+        fpath = sys.executable
+    else:
+        fpath = __file__
+    return os.path.dirname(fpath)
 
 try:
     arch = ''
@@ -19,7 +25,7 @@ try:
     else:
         logger.error('Unsupported operating system')
         raise EnvironmentError('Unsupported operating system')
-    libpath = os.path.join(os.path.dirname(__file__), 'libs', so)
+    libpath = os.path.join(module_path(), 'libs', so)
     logger.debug('Looking for libsteam in "{}"'.format(libpath))
     # Load the library
     api = CDLL(libpath)

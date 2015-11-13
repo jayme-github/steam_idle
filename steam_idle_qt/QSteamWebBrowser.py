@@ -12,8 +12,6 @@ class QSteamWebBrowser(SteamWebBrowser, QObject):
         self.parent = parent
         QObject.__init__(self, self.parent)
         # Set appdata path, this will end up in something like ~/.config/jayme-github/SteamIdle/
-        print(QDir.toNativeSeparators(self.settings.fileName()))
-        print(os.path.dirname(QDir.toNativeSeparators(self.settings.fileName())))
         self._appdata_path = os.path.join(
             os.path.dirname(QDir.toNativeSeparators(self.settings.fileName())),
             'SteamIdle'

@@ -3,14 +3,16 @@
 from PyQt4 import QtGui
 from steam_idle_qt.ui.mainwindow import MainWindow
 import logging
-logging.basicConfig(format='%(asctime)s (%(name)s.%(funcName)s) [%(levelname)s] %(message)s', level=logging.DEBUG)
+import sys
+LOGFMT = '%(asctime)s (%(name)s.%(funcName)s) [%(levelname)s] %(message)s'
+if hasattr(sys, 'frozen'):
+    import os
+    os.environ['REQUESTS_CA_BUNDLE'] = os.path.join(os.path.dirname(sys.executable), 'cacert.pem')
+logging.basicConfig(format=LOGFMT,
+    level=logging.DEBUG,
+)
 logging.getLogger('requests').setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
-#for handler in logging.root.handlers:
-#    handler.addFilter(logging.Filter('steamweb'))
-#    handler.addFilter(logging.Filter('steam_idle'))
-#    handler.addFilter(logging.Filter('steam_idle_qt'))
-
 
 if __name__ == "__main__":
     import sys
