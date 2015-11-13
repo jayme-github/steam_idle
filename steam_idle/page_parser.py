@@ -259,7 +259,7 @@ class SteamBadges(object):
 
             if fetch_images == True:
                 # Retrieve and store icon and logosmall
-                pool_size = multiprocessing.cpu_count() * 2
+                pool_size = multiprocessing.cpu_count() * 5
                 pool = multiprocessing.Pool(processes=pool_size)
                 pool_jobs = [(appinfo, self.image_path) for appinfo in appinfos]
                 pool_outputs = pool.map(fetch_images_worker, pool_jobs)
