@@ -126,7 +126,6 @@ class SettingsDialog(QDialog, Ui_Dialog):
 
     @pyqtSlot()
     def on_lineEditUsername_editingFinished(self):
-        self.logger.debug('on_lineEditUsername_editingFinished')
         if self.lineEditUsername.text():
             self.lineEditUsername.setStyleSheet('')
             #self.checkSteamCredentials()
@@ -135,7 +134,6 @@ class SettingsDialog(QDialog, Ui_Dialog):
 
     @pyqtSlot()
     def on_lineEditPassword_editingFinished(self):
-        self.logger.debug('on_lineEditPassword_editingFinished')
         if self.lineEditPassword.text():
             self.lineEditPassword.setStyleSheet('')
             #self.checkSteamCredentials()
@@ -144,7 +142,6 @@ class SettingsDialog(QDialog, Ui_Dialog):
 
     @pyqtSlot('QString')
     def on_lineEditUsername_textEdited(self, text):
-        self.logger.debug('on_lineEditUsername_textEdited')
         self.credentialsOK = False
         self.setConnectedStatus(self.credentialsOK)
         if self.lineEditUsername.text() and self.lineEditPassword.text():
@@ -154,7 +151,6 @@ class SettingsDialog(QDialog, Ui_Dialog):
 
     @pyqtSlot('QString')
     def on_lineEditPassword_textEdited(self, text):
-        self.logger.debug('on_lineEditPassword_textEdited')
         self.credentialsOK = False
         self.setConnectedStatus(self.credentialsOK)
         if self.lineEditUsername.text() and self.lineEditPassword.text():
