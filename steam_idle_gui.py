@@ -15,7 +15,6 @@ logging.getLogger('requests').setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
-    import sys
     app = QtGui.QApplication(sys.argv)
     logger.debug('Creating MainWindow')
     ui = MainWindow()
