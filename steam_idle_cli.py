@@ -75,7 +75,6 @@ def main_idle(apps):
     new_apps = [] # new apps added douring idle
     #or appid, remainingDrops, playTime in apps:
     for app in apps:
-        idletime = 0
         p = IdleChild(app)
         p.start()
         while app.remainingDrops > 0:
@@ -86,7 +85,6 @@ def main_idle(apps):
                     strfsec(delay),
                     (datetime.now() + timedelta(seconds=delay)).strftime('%c')
             ))
-            idletime += r_sleep(delay)
 
             # Re check for remainingDrops and new apps
             for a in sbb.get_apps(fetch_images=False).values():
