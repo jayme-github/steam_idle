@@ -35,19 +35,19 @@ class Idle(BaseIdle):
         if self.app.remainingDrops > 0:
             delay = calc_delay(self.app.remainingDrops, self.app.playTime)
             until = datetime.now() + timedelta(seconds=delay)
-            self.logger.info('_idle called: %s has %d remaining drops: Ideling for %s (\'till %s)' % (
+            self.logger.info('_idle called: %s has %d remaining drops: Ideling for %s (\'till %s)',
                     self.app,
                     self.app.remainingDrops,
                     strfsec(delay),
                     until.strftime('%c')
-            ))
+            )
             # Setup and start idleChild if not done already
             if self.idleChild == None:
                 self.logger.debug('setup a new child')
                 self.idleChild = IdleChild(self.app)
                 self.idleChild.start()
             else:
-                self.logger.debug('child is still running: %s' %self.idleChild)
+                self.logger.debug('child is still running: %s', self.idleChild)
             # idleChild is setup or still running
 
             self.statusUpdate.emit('Ideling "{}" for {} (\'till {})'.format(
@@ -82,7 +82,7 @@ class Idle(BaseIdle):
 
     @pyqtSlot(App)
     def doStartIdle(self, app):
-        self.logger.debug('doStartIdle(%s)' % app)
+        self.logger.debug('doStartIdle(%s)', app)
         if self.app == None or app.appid != self.app.appid:
             # New/first app, stopIdle first
             self._stopIdle() # this won't do anything on first run
@@ -95,7 +95,7 @@ class Idle(BaseIdle):
         apps = self.sbb.get_apps() # Update data from steam (it's okay to block this thread)
         newapp = apps.get(self.app.appid)
         if newapp:
-            self.logger.debug('updated app: OLD: %s NEW: %s' %(self.app, newapp))
+            self.logger.debug('updated app: OLD: %s NEW: %s', self.app, newapp)
             self.steamDataReady.emit(apps) #Send new steam data to main thread
             self.app = newapp
             self._idle()
@@ -120,17 +120,17 @@ class MultiIdle(BaseIdle):
     idleChilds = {}
 
     def _stopChild(self, p):
-        self.logger.debug('MultiIdle._stopChild(%s)'%p)
+        self.logger.debug('MultiIdle._stopChild(%s)', p)
         p.terminate()
-        self.logger.debug('MultiIdle._stopChild(%s) child terminated'%p)
+        self.logger.debug('MultiIdle._stopChild(%s) child terminated', p)
         p.join()
-        self.logger.debug('MultiIdle._stopChild(%s) joined thead'%p)
+        self.logger.debug('MultiIdle._stopChild(%s) joined thead', p)
         del self.idleChilds[p]
-        self.logger.debug('MultiIdle._stopChild(%s) DONE'%p)
+        self.logger.debug('MultiIdle._stopChild(%s) DONE', p)
 
     @pyqtSlot(list)
     def doStartIdle(self, apps):
-        self.logger.info('MultiIdle.multiIdle(%s)' %apps)
+        self.logger.info('MultiIdle.multiIdle(%s)', apps)
         for app in apps:
             delay = int((2.0 - app.playTime) * 60 * 60)
             if delay <= 0:
@@ -141,7 +141,7 @@ class MultiIdle(BaseIdle):
             # Start the (idle) process
             p.start()
             self.idleChilds[p] = endtime
-            self.logger.debug('doStartIdle: started %s' %p)
+            self.logger.debug('doStartIdle: started %s', p)
             if len(self.idleChilds) < len(apps):
                 # Steam client will crash if childs spawn too fast
                 sleep(0.25)
@@ -149,7 +149,7 @@ class MultiIdle(BaseIdle):
 
     @pyqtSlot()
     def _idle(self):
-        self.logger.info('MultiIdle._idle: Running with %d childs' % len(self.idleChilds))
+        self.logger.info('MultiIdle._idle: Running with %d childs', len(self.idleChilds))
         # Now wait for the idleChilds to finish, idleChilds sorted by endtime
         try:
             p, endtime = sorted(self.idleChilds.items(), key=lambda x: x[1])[0]
@@ -169,7 +169,7 @@ class MultiIdle(BaseIdle):
             now = datetime.now()
             diff = int(ceil((endtime - now).total_seconds()))
             if endtime < now:
-                self.logger.debug('%s endtime (%s) is in the past, shutting down' % (p, endtime,))
+                self.logger.debug('%s endtime (%s) is in the past, shutting down', p, endtime)
                 self.appDone.emit(p.app)
                 self._stopChild(p)
                 self._idle()
@@ -179,10 +179,10 @@ class MultiIdle(BaseIdle):
                 self._stopChild(p)
                 self._idle()
             else:
-                self.logger.debug('Sleeping for %s till %s' %(
+                self.logger.debug('Sleeping for %s till %s',
                     strfsec(diff),
                     (now + timedelta(seconds=diff)).strftime('%c')
-                ))
+                )
                 self._stopTimer() # Will stop the timer if it exists
                 self.idleTimer = QTimer()
                 self.idleTimer.timeout.connect(self._idle)
