@@ -1,3 +1,5 @@
+[![Code Health](https://landscape.io/github/jayme-github/steam_idle/master/landscape.svg?style=flat)](https://landscape.io/github/jayme-github/steam_idle/master)
+
 Steam Idle
 ===========
 
