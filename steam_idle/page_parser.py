@@ -136,13 +136,13 @@ class SteamBadges(object):
 
         return app
 
-    def parse_badges_pages(self, appid_filter=[]):
+    def parse_badges_pages(self, appid_filter=None):
         ''' Iterates over all badges pages of a steam profile
             Parses all badges (using parse_badge()) to return the appId, play time ('till now) and the number of card drops left.
 
             @param appid_filter only look for appids listed here
         '''
-
+        appid_filter = appid_filter or []
         filter_appids = True if appid_filter else False
         parsed_apps = {}
         currentPage = badgePages = 1
@@ -223,11 +223,12 @@ class SteamBadges(object):
             if os.path.exists(imagepath):
                 os.unlink(imagepath)
 
-    def get_apps(self, appid_filter=[], fetch_images=True):
+    def get_apps(self, appid_filter=None, fetch_images=True):
         ''' Parse the badge pages, add app info (like name and icon) if needed
             fetch and store the icons and cache app info in shelve.
             Return a dict of all apps on badges page (with and without remaining drops).
         '''
+        appid_filter = appid_filter or []
         apps = self.parse_badges_pages(appid_filter)
         #apps = mockSome()
 
