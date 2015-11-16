@@ -19,8 +19,6 @@ def r_sleep(sec):
     return sec
 
 def main_idle(apps):
-    global args
-
     # Just to make sure it's ordered
     apps = sorted(apps, key=lambda x: x.playTime, reverse=True)
     if not args.skip_multi:
