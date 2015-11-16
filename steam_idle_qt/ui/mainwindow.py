@@ -25,7 +25,7 @@ class ParseApps(QThread):
         logger = logging.getLogger('.'.join((__name__, self.__class__.__name__)))
         logger.info('Updating apps from steam')
         apps = self.sbb.get_apps()
-        logger.debug('ParseApps: {} apps'.format(len(apps)))
+        logger.debug('ParseApps: %d apps', len(apps))
         self.steamDataReady.emit(apps)
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -222,12 +222,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot(str)
     def on_idleStatusUpdate(self, msg):
         #TODO Would be nice to have some timer ticking in statusbar
-        self.logger.debug('Got idleStatusUpdate: %s' %msg)
+        self.logger.debug('Got idleStatusUpdate: %s', msg)
         self.startProgressBar(msg)
 
     @pyqtSlot(str)
     def startProgressBar(self, message):
-        self.logger.debug('startProgressBar: %s' %message)
+        self.logger.debug('startProgressBar: %s', message)
         self.labelStatusBar.setText(message)
         self.progressBar.setToolTip(message)
         self.progressBar.show()
@@ -246,7 +246,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self._idleThread.wait()
         self._idleThread.start()
         self.activeApps = [app]
-        self.logger.debug('activeApps: "%s"' % self.activeApps)
+        self.logger.debug('activeApps: "%s"', self.activeApps)
         QMetaObject.invokeMethod(self._idleInstance, 'doStartIdle', Qt.QueuedConnection,
                                     Q_ARG(App, app))
         # Enable nextAction (if more than one app to idle)
@@ -262,7 +262,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self._multiIdleThread.wait()
         self._multiIdleThread.start()
         self.activeApps = [a for a in self.apps.values() if a.playTime < 2.0 and a.remainingDrops > 0]
-        self.logger.debug('startMultiIdle for {} apps: {}'.format(len(self.activeApps), self.activeApps))
+        self.logger.debug('startMultiIdle for %d apps: %s', len(self.activeApps), self.activeApps)
         QMetaObject.invokeMethod(self._multiIdleInstance, 'doStartIdle', Qt.QueuedConnection,
                                     Q_ARG(list, self.activeApps))
         self.actionNext.setEnabled(False)
@@ -271,7 +271,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _post_startIdle(self):
         ''' Update UI stuff (icons, table etc.) after starting idle '''
-        self.logger.debug('activeApps: "%s"' % self.activeApps)
+        self.logger.debug('activeApps: "%s"', self.activeApps)
         # Switch to stop icon/text
         if len(self.activeApps) > 1:
             # MultiIdle
@@ -299,7 +299,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot()
     def _post_stopIdle(self):
         ''' Update UI stuff (icons, table etc.) after stopping idle '''
-        self.logger.debug('activeApps: "%s"' % self.activeApps)
+        self.logger.debug('activeApps: "%s"', self.activeApps)
         # Update statusCells
         for app in self.activeApps:
             self.tableWidgetGames.item(
@@ -523,7 +523,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                -> _threadParseApps.steamDataReady
         '''
         self.logger.debug('on_multiIdleFinished')
-        self.logger.debug('activeApps: "%s"' % self.activeApps)
+        self.logger.debug('activeApps: "%s"', self.activeApps)
         if len(self.activeApps) > 0:
             raise AssertionError('activeApps should be empty!')
 
