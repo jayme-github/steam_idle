@@ -592,12 +592,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @pyqtSlot(App)
     def on_idleAppDone(self, app=None):
-        self.logger.debug('activeApps: "%s"' % self.activeApps)
+        self.logger.debug('activeApps: "%s"', self.activeApps)
         nextApp = None
         if len(self.activeApps) >= 1:
             rowId = self.rowIdForAppId(self.activeApps[0].appid)
             nextApp = self.nextAppWithDrops(startAt=rowId+1)
-            self.logger.debug('nextApp: "%s"' % nextApp)
+            self.logger.debug('nextApp: "%s"', nextApp)
             if nextApp:
                 # Update icon of old statusCell
                 self.tableWidgetGames.item(rowId, 0).setIcon(QIcon())
@@ -620,7 +620,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.activeApps.remove(app)
         self.logger.debug('activeApps: "%s"', self.activeApps)
         rowId = self.rowIdForAppId(app.appid)
-        self.logger.debug('on_multiIdleAppDone, removing icon from row: %d' %rowId)
+        self.logger.debug('on_multiIdleAppDone, removing icon from row: %d', rowId)
         self.tableWidgetGames.item(rowId, 0).setIcon(QIcon()) # Remove "running" icon from app
         self.on_actionRefresh_triggered()
 
@@ -674,7 +674,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot('QPoint')
     def on_tableWidgetGames_customContextMenuRequested(self, pos):
         idx = self.tableWidgetGames.indexAt(pos)
-        self.logger.debug('%s %s' %(idx.row(),idx.column()))
+        self.logger.debug('%s %s', idx.row(), idx.column())
         app = self.appInRow(idx.row())
         self.logger.debug(str(app))
 
