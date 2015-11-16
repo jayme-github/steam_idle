@@ -60,12 +60,12 @@ class SettingsDialog(QDialog, Ui_Dialog):
 
     def setGreenMsg(self, msg):
         self.labelStatus_2.setStyleSheet('color: green')
-        self.logger.debug('setRedMsg(%s)' % msg)
+        self.logger.debug('setGreenMsg(%s)', msg)
         self.labelStatus_2.setText(msg)
 
     def setRedMsg(self, msg):
         self.labelStatus_2.setStyleSheet('color: red')
-        self.logger.debug('setRedMsg(%s)' % msg)
+        self.logger.debug('setRedMsg(%s)', msg)
         self.labelStatus_2.setText(msg)
 
     def setConnectedStatus(self, status):
