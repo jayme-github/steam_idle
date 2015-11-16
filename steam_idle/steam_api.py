@@ -26,7 +26,7 @@ try:
         logger.error('Unsupported operating system')
         raise EnvironmentError('Unsupported operating system')
     libpath = os.path.join(module_path(), 'libs', so)
-    logger.debug('Looking for libsteam in "{}"'.format(libpath))
+    logger.debug('Looking for libsteam in "%s"', libpath)
     # Load the library
     api = CDLL(libpath)
     # Define return typed of "exported" functions
