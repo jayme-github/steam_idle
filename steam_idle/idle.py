@@ -15,7 +15,7 @@ class IdleChild(multiprocessing.Process):
     def __init__(self, app):
         super(IdleChild, self).__init__()
         self.app = app
-        self.name += '-[%s]' % str(self.app.name if self.app.name else self.app.appid)
+        self.name += '-[%s]' % str(self.app.name.encode('ascii', 'ignore') if self.app.name else self.app.appid)
 
     def run(self):
         os.environ['SteamAppId'] = str(self.app.appid)
