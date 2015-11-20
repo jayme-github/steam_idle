@@ -61,7 +61,7 @@ class App(object):
 def mockSome():
     import random
     apps = {}
-    for i in (232770,262830,285010,321950,343100,307170):
+    for i in (232770,262830,285010,321950,343100,307170,311210,233290):
         a = App()
         a.appid = i
         a.remainingDrops = random.randint(0,6)
