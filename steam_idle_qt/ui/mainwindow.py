@@ -6,27 +6,16 @@ Module implementing MainWindow.
 import os
 import logging
 from itertools import chain
+from datetime import timedelta
 from PyQt4.QtCore import pyqtSlot, Qt, QThread, QDir, pyqtSignal, QMetaObject, Q_ARG, QTimer, QSettings, QPoint, QSize, QUrl
 from PyQt4.QtGui import QMainWindow, QTableWidgetItem, QProgressBar, QPixmap, QIcon, QHeaderView, QLabel, QDialog, QMenu, QDesktopServices
 
 from .Ui_mainwindow import Ui_MainWindow, _fromUtf8, _translate
 from .settingsdialog import SettingsDialog
-from steam_idle_qt.QSteamWebBrowser import QSteamWebBrowser
 from steam_idle_qt.QIdle import Idle, MultiIdle
-from steam_idle.page_parser import SteamBadges, App
+from steam_idle.page_parser import App
+from steam_idle_qt.QSteamParser import QSteamParser
 from steam_idle import steam_api
-
-class ParseApps(QThread):
-    steamDataReady = pyqtSignal(dict)
-    def __init__(self, sbb):
-        super(ParseApps, self).__init__()
-        self.sbb = sbb
-    def run(self):
-        logger = logging.getLogger('.'.join((__name__, self.__class__.__name__)))
-        logger.info('Updating apps from steam')
-        apps = self.sbb.get_apps()
-        logger.debug('ParseApps: %d apps', len(apps))
-        self.steamDataReady.emit(apps)
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     """
@@ -39,11 +28,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     totalRemainingDrops = 0
     _idleThread = None
     _multiIdleThread = None
-    _threadParseApps = None
+    _SteamParserThread = None
     _steamPassword = None
     _checkSteamRunningTimer = None
     _init_done = False # True if initialization is completed (loaded data from steam etc.)
     _startup = True # True on app start, set to false then init is done (and steam is running).
+    _statusBarTimer = None
+    _statusBarTimerDelta = None
     steamDataUpdated = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -68,6 +59,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.progressBar.setMaximumHeight(self.statusBar.height())
         self.progressBar.setMaximumWidth(self.statusBar.width())
         self.labelStatusBar = QLabel()
+        self.labelStatusBarTimer = QLabel()
+        self.statusBar.addWidget(self.labelStatusBarTimer)
         self.statusBar.addPermanentWidget(self.labelStatusBar)
         self.statusBar.addPermanentWidget(self.progressBar)
 
@@ -94,27 +87,29 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if steam_api.IsSteamRunning():
             self.logger.debug('Steam client is running')
             self.labelSteamNotRunning.hide()
-            self.toggle_actionStartStopIdle()
-            self.toggle_actionStartStopMultiIdle()
+            # Skipp that stuff if idle is running
+            if len(self.activeApps) < 1:
+                self.toggle_actionStartStopIdle()
+                self.toggle_actionStartStopMultiIdle()
 
-            # Autostart
-            if self._init_done and self._startup:
-                self._startup = False
-                autostartMode = self.settings.value('autostart', 'None')
-                self.logger.info('autostartMode: "%s"', autostartMode)
-                if autostartMode == 'Multi-Idle':
-                    MIThreshold = self.settings.value('multiidlethreshold', 2, type=int)
-                    if self.gamesInRefundPeriod < MIThreshold:
-                        # Number of games in refund is below threshold, start normal idle
-                        self.logger.debug('Number of games in refund is below threshold, start normal idle')
-                        autostartMode = 'Idle'
-                    else:
-                        self.logger.debug('Autostart MultiIdle')
-                        self.on_actionStartStopMultiIdle_triggered()
+                # Autostart
+                if self._init_done and self._startup:
+                    self._startup = False
+                    autostartMode = self.settings.value('autostart', 'None')
+                    self.logger.info('autostartMode: "%s"', autostartMode)
+                    if autostartMode == 'Multi-Idle':
+                        MIThreshold = self.settings.value('multiidlethreshold', 2, type=int)
+                        if self.gamesInRefundPeriod < MIThreshold:
+                            # Number of games in refund is below threshold, start normal idle
+                            self.logger.debug('Number of games in refund is below threshold, start normal idle')
+                            autostartMode = 'Idle'
+                        else:
+                            self.logger.debug('Autostart MultiIdle')
+                            self.on_actionStartStopMultiIdle_triggered()
 
-                if autostartMode == 'Idle':
-                    self.logger.debug('Autostart Idle')
-                    self.on_actionStartStopIdle_triggered()
+                    if autostartMode == 'Idle':
+                        self.logger.debug('Autostart Idle')
+                        self.on_actionStartStopIdle_triggered()
 
         else:
             self.logger.warning('Steam client is not running')
@@ -175,46 +170,62 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         ''' All init stuff that takes time should be done in here to not
             delay the UI startup (fast as possible response to the user).
         '''
-        # Setup SteamWebBrowser etc.
-        self.logger.debug('Init QSteamWebBrowser')
-        swb = QSteamWebBrowser(
-                username=self.settings.value('steam/username'),
-                password=self.steamPassword,
-                parent=self
-        )
-
         data_path = os.path.join(
             os.path.dirname(QDir.toNativeSeparators(self.settings.fileName())),
             'SteamIdle'
         )
-        self.logger.debug('Using data path: "%s"', data_path)
-        self.sbb = SteamBadges(swb, data_path)
 
-        # Create a thread for parsing apps and connect signal
-        self._threadParseApps = ParseApps(self.sbb)
-        self._threadParseApps.steamDataReady.connect(self.updateSteamData)
+        self._SteamParserThread = QThread()
+        self._SteamParserInstance = QSteamParser(
+            username=self.settings.value('steam/username'),
+            password=self.steamPassword,
+            data_path=data_path
+        )
+        self._SteamParserInstance.moveToThread(self._SteamParserThread)
+        self._SteamParserInstance.steamDataReady.connect(self.updateSteamData)
+        self._SteamParserInstance.timerStart.connect(self.on_SteamParser_startTimer)
+        self._SteamParserInstance.timerStop.connect(self.on_SteamParser_stopTimer)
+        self._SteamParserThread.start()
 
         # Create worker and thread for ideling
         self._idleThread = QThread()
-        self._idleInstance = Idle(self.sbb)
+        self._idleInstance = Idle()
         self._idleInstance.moveToThread(self._idleThread)
-        self._idleInstance.appDone.connect(self.on_idleAppDone)           # called when app has finished ideling
-        self._idleInstance.statusUpdate.connect(self.on_idleStatusUpdate) # called on new idle period (e.g. new delay)
-        self._idleInstance.steamDataReady.connect(self.updateSteamData)   # called then idle thread has updated steam badge data
-        self._idleInstance.finished.connect(self._post_stopIdle)          # called on thread exit, update UI etc.
+        # Connect signals
+        # called when app has finished ideling
+        self._idleInstance.appDone.connect(self.on_idleAppDone)
+        # called on new idle period (e.g. new delay)
+        self._idleInstance.statusUpdate.connect(self.on_idleStatusUpdate)
+        # Update steam data (apps) in idleInstance (called periodically by QStremParser)
+        self._SteamParserInstance.steamDataReady.connect(self._idleInstance.on_steamDataReady)
+        # Update/Start SteamParserTimer with new interval
+        self._idleInstance.updateSteamParserTimer.connect(self._SteamParserInstance.startTimer)
+        # called on thread exit, update UI, stop SteamParser timer
+        self._idleInstance.finished.connect(self._post_stopIdle)
         self._idleInstance.finished.connect(self._idleThread.quit)
+        self._idleInstance.finished.connect(self._SteamParserInstance.stopTimer)
 
         # Create worker and thread for multi idle
         self._multiIdleThread = QThread()
         self._multiIdleInstance = MultiIdle()
         self._multiIdleInstance.moveToThread(self._multiIdleThread)
-        self._multiIdleInstance.statusUpdate.connect(self.on_idleStatusUpdate) # called on start and when idle childs finish
-        self._multiIdleInstance.allDone.connect(self.on_multiIdleFinished)     # called when all apps are done
-        self._multiIdleInstance.appDone.connect(self.on_multiIdleAppDone)      # called when one app is done
-        self._multiIdleInstance.finished.connect(self._post_stopIdle)          # called on thread exit, update UI etc.
+        # Connect signals
+        # called on start and when idle childs finish
+        self._multiIdleInstance.statusUpdate.connect(self.on_idleStatusUpdate)
+        # called when one app is done
+        self._multiIdleInstance.appDone.connect(self.on_multiIdleAppDone)
+        # called when all apps are done
+        self._multiIdleInstance.allDone.connect(self.on_multiIdleFinished)
+        # Update steam data (apps) in multiIdleInstance (called periodically by QStremParser)
+        self._SteamParserInstance.steamDataReady.connect(self._multiIdleInstance.on_steamDataReady)
+        # Update/Start SteamParserTimer with new interval
+        self._multiIdleInstance.updateSteamParserTimer.connect(self._SteamParserInstance.startTimer)
+        # called on thread exit, update UI etc.
+        self._multiIdleInstance.finished.connect(self._post_stopIdle)
         self._multiIdleInstance.finished.connect(self._multiIdleThread.quit)
+        self._multiIdleInstance.finished.connect(self._SteamParserInstance.stopTimer)
 
-        # Update the tableWidgetGames (e.g. start _threadParseApps)
+        # Update the tableWidgetGames
         self.on_actionRefresh_triggered()
 
         self._init_done = True
@@ -404,7 +415,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         ''' Update UI with data from steam
             will use the apps provided as parameter or self.apps
         '''
-        self.logger.debug('updateSteamData with %d apps as parameter'% len(apps) if apps != None else 0)
+        self.logger.debug('updateSteamData with %d apps as parameter', len(apps) if apps != None else 0)
 
         if apps != None:
             self.apps = apps
@@ -449,7 +460,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.labelTotalRemainingDrops.show()
 
             # Leave actions untuched if idle is running
-            if not self.activeApps:
+            if len(self.activeApps) < 1:
                 self.toggle_actionStartStopIdle()
                 self.toggle_actionStartStopMultiIdle()
 
@@ -520,22 +531,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             _multiIdleInstance.finished
              -> _post_stopIdle
               -> on_actionRefresh_triggered
-               -> _threadParseApps.steamDataReady
+               -> .steamDataReady
         '''
         self.logger.debug('on_multiIdleFinished')
         self.logger.debug('activeApps: "%s"', self.activeApps)
         if len(self.activeApps) > 0:
             raise AssertionError('activeApps should be empty!')
 
-        def updateDone():
+        def _updateDone():
             try:
-                self.steamDataUpdated.disconnect(updateDone)
+                self.steamDataUpdated.disconnect(_updateDone)
             except (TypeError, AttributeError):
                 pass
             self.logger.debug('Calling startIdle')
             self.startIdle(self.nextAppWithDrops())
         # start idle for first app with drops as soon as steam data is updated
-        self.steamDataUpdated.connect(updateDone)
+        self.steamDataUpdated.connect(_updateDone)
 
     @pyqtSlot()
     def on_actionStartStopIdle_triggered(self):
@@ -556,7 +567,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def on_actionRefresh_triggered(self):
         if not self.labelStatusBar.text():
             self.startProgressBar('Loading data from Steam...')
-        self._threadParseApps.start()
+        QMetaObject.invokeMethod(self._SteamParserInstance, 'updateApps',
+                                 Qt.QueuedConnection)
 
     @pyqtSlot('QModelIndex', 'QModelIndex')
     def on_tableWidgetGamesSelectionModel_currentRowChanged(self, current, previous):
@@ -605,7 +617,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 # Load the next app into idle thread
                 self.startIdle(nextApp)
                 if rowId + 1 == self.tableWidgetGames.rowCount() - 1:
-                    # FIXME: This was the last app(/row), disable next button
+                    # This was the last app(/row), disable next button
                     self.actionNext.setEnabled(False)
 
         if nextApp == None:
@@ -627,10 +639,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot(int, int)
     def on_tableWidgetGames_cellDoubleClicked(self, row, column):
         # FIXME: cellDoubleClicked left click only
-        def startClickedApp():
+        def _startClickedApp():
             try:
-                self._idleThread.finished.disconnect(startClickedApp)
-                self._multiIdleThread.finished.disconnect(startClickedApp)
+                self._idleThread.finished.disconnect(_startClickedApp)
+                self._multiIdleThread.finished.disconnect(_startClickedApp)
             except (TypeError, AttributeError):
                 pass
             app = self.appInRow(row)
@@ -641,15 +653,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # Stop currently ideling game
             self.logger.debug('stop idle')
             self.stopIdle()
-            self._idleThread.finished.connect(startClickedApp)
+            self._idleThread.finished.connect(_startClickedApp)
         elif len(self.activeApps) > 1:
             # Stop MultiIdle
             self.logger.debug('stop multiidle')
             self.stopMultiIdle()
-            self._multiIdleThread.finished.connect(startClickedApp)
+            self._multiIdleThread.finished.connect(_startClickedApp)
         else:
             # Nothing running
-            startClickedApp()
+            _startClickedApp()
 
     @pyqtSlot()
     def on_actionSettings_triggered(self):
@@ -678,11 +690,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         app = self.appInRow(idx.row())
         self.logger.debug(str(app))
 
-        def startIdle():
-            self.logger.info('starting idle %s', app)
-            self.startIdle(app)
-
-        def stopIdle():
+        def _stopIdle():
             self.logger.info('stopping idle %s', app)
             if len(self.activeApps) == 1:
                 # Something is running, stop
@@ -693,7 +701,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.logger.debug('stop multiidle')
                 self.stopMultiIdle()
 
-        def openBadgeProgress():
+        def _openBadgeProgress():
             self.logger.info('Opening badge progress page for %s', app)
             QDesktopServices.openUrl(QUrl('https://steamcommunity.com/my/gamecards/%d'%app.appid))
 
@@ -701,16 +709,38 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if app in self.activeApps:
             menu.addAction(QIcon.fromTheme(_fromUtf8('media-playback-stop')),
                             'Stop idle',
-                            stopIdle)
+                            _stopIdle)
         else:
             menu.addAction(QIcon.fromTheme(_fromUtf8('media-playback-start')),
                             'Start idle',
-                            startIdle)
+                            lambda: self.startIdle(app))
         menu.addSeparator()
-        menu.addAction('Show badge progress', openBadgeProgress)
+        menu.addAction('Show badge progress', _openBadgeProgress)
         # TODO: Add to blacklist option
         p = QPoint(pos)
         p.setY(p.y() + menu.height())
         where = self.tableWidgetGames.mapToGlobal(p)
         menu.exec_(where)
 
+    @pyqtSlot()
+    def _updateLabelStatusBarTimer(self):
+        self._statusBarTimerDelta -= timedelta(seconds=1)
+        self.labelStatusBarTimer.setText('Next Update: %s' % self._statusBarTimerDelta)
+
+    @pyqtSlot(int)
+    def on_SteamParser_startTimer(self, interval):
+        if self._statusBarTimer:
+            self.on_SteamParser_stopTimer()
+        self.logger.debug(interval)
+        self._statusBarTimerDelta = timedelta(seconds=interval/1000)
+        self.labelStatusBarTimer.setText('Next Update: %s' % self._statusBarTimerDelta)
+        self._statusBarTimer = QTimer()
+        self._statusBarTimer.timeout.connect(self._updateLabelStatusBarTimer)
+        self._statusBarTimer.start(1*1000)
+
+    @pyqtSlot()
+    def on_SteamParser_stopTimer(self):
+        self.logger.debug('Hide labelStatusBarTimer')
+        self._statusBarTimer.stop()
+        self._statusBarTimer = None
+        self.labelStatusBarTimer.clear()

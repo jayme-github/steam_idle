@@ -50,14 +50,13 @@ sameDelay = 0
 lastDelay = 5
 def calc_delay(remainingDrops, playTime):
     ''' Calculate the idle delay
-        Minimum play time for cards to drop is 2 hours.
+        Minimum play time for cards to drop is ~20min again. Except for accounts
+        that requested a refund?
+
         Re-check every 15 mintes if there are more than 1 card drops remaining.
         If only one drop remains, check every 5 minutes
     '''
     global sameDelay, lastDelay
-    baseDelay = int((2.0 - playTime) * 60 * 60)
-    if baseDelay < 0:
-        baseDelay = 0
 
     # Reset lastDelay for new appids
     if remainingDrops > 1:
@@ -65,9 +64,9 @@ def calc_delay(remainingDrops, playTime):
         sameDelay = 0
 
     if remainingDrops > 2:
-        return baseDelay + (15 * 60) # Check every 15 minutes
+        return 15 * 60 # Check every 15 minutes
     elif remainingDrops == 2:
-        return baseDelay + (10 * 60) # Check every 10 minutes
+        return 10 * 60 # Check every 10 minutes
     else:
         # decrease delay by one minute every two calls
         if lastDelay > 1:
@@ -75,4 +74,4 @@ def calc_delay(remainingDrops, playTime):
                 sameDelay = 0
                 lastDelay -= 1
             sameDelay += 1
-        return baseDelay + (lastDelay * 60) # Check every 5 minutes
+        return lastDelay * 60 # Check every 5 minutes
