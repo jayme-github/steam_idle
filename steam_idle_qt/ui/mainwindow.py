@@ -415,7 +415,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         ''' Update UI with data from steam
             will use the apps provided as parameter or self.apps
         '''
-        self.logger.debug('updateSteamData with %d apps as parameter', len(apps) if apps != None else 0)
+        self.logger.debug('updateSteamData with %d apps as parameter',
+            len(apps) if apps is not None else 0
+        )
 
         if apps != None:
             self.apps = apps

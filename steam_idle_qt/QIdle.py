@@ -21,7 +21,7 @@ class Idle(BaseIdle):
 
     def _idle(self):
         if self.app.remainingDrops > 0:
-            delay = calc_delay(self.app.remainingDrops, self.app.playTime)
+            delay = calc_delay(self.app.remainingDrops)
             until = datetime.now() + timedelta(seconds=delay)
 
             self.logger.info('_idle called: %s has %d remaining drops: Ideling for %s (\'till %s)',

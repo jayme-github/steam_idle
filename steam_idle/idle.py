@@ -48,7 +48,7 @@ class IdleChild(multiprocessing.Process):
 
 sameDelay = 0
 lastDelay = 5
-def calc_delay(remainingDrops, playTime):
+def calc_delay(remainingDrops):
     ''' Calculate the idle delay
         Minimum play time for cards to drop is ~20min again. Except for accounts
         that requested a refund?

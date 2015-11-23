@@ -78,7 +78,7 @@ def main_idle(apps):
         p = IdleChild(app)
         p.start()
         while app.remainingDrops > 0:
-            delay = calc_delay(app.remainingDrops, app.playTime)
+            delay = calc_delay(app.remainingDrops)
             print('"%s" has %d remaining drops: Idling for %s (\'till %s)' % (
                     app.name,
                     app.remainingDrops,
