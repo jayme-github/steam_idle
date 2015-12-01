@@ -80,7 +80,7 @@ def fetch_images_worker(job):
         filename = '%d_%s.jpg' % (appid, imgtype)
         imagepath = os.path.join(image_path, filename)
         if imgtype == 'header':
-            url = 'http://cdn.akamai.steamstatic.com/steam/apps/%d/header_292x136.jpg' % appid
+            url = 'https://steamcdn-a.akamaihd.net/steam/apps/%d/header_292x136.jpg' % appid
         else:
             url = appinfo.get(imgtype+'url')
 
