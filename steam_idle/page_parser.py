@@ -69,25 +69,43 @@ def mockSome():
         apps[i] = a
     return apps
 
-
-def fetch_images_worker(job):
-    ''' Multiprocessing worker function to fetch and store icon and logo for an app
-        Will run in multiprocessing.Pool
+class FetchImages(multiprocessing.Process):
+    ''' Multiprocessing worker to fetch and store icon and logo for an app
     '''
-    appinfo, image_path = job
-    appid = appinfo.get('appid')
-    for imgtype in ('icon', 'logosmall', 'header'):
-        filename = '%d_%s.jpg' % (appid, imgtype)
-        imagepath = os.path.join(image_path, filename)
-        if imgtype == 'header':
-            url = 'https://steamcdn-a.akamaihd.net/steam/apps/%d/header_292x136.jpg' % appid
-        else:
-            url = appinfo.get(imgtype+'url')
+    def __init__(self, task_queue, image_path):
+        super(FetchImages, self).__init__()
+        self.task_queue = task_queue
+        self.image_path = image_path
+        self.session = requests.Session()
 
-        r = requests.get(url)
-        with open(imagepath, 'wb') as f:
-            f.write(r.content)
-    return (appid, appinfo.get('name'))
+    def run(self):
+        while True:
+            next_task = self.task_queue.get()
+            if next_task is None:
+                # Poison pill
+                self.task_queue.task_done()
+                self.session.close()
+                break
+            # Process this task
+            self.fetch_images(next_task)
+            self.task_queue.task_done()
+        self.session.close()
+        return
+
+    def fetch_images(self, task):
+        appinfo = task
+        appid = appinfo.get('appid')
+        for imgtype in ('icon', 'logosmall', 'header'):
+            filename = '%d_%s.jpg' % (appid, imgtype)
+            imagepath = os.path.join(self.image_path, filename)
+            if imgtype == 'header':
+                url = 'https://steamcdn-a.akamaihd.net/steam/apps/%d/header_292x136.jpg' % appid
+            else:
+                url = appinfo.get(imgtype+'url')
+
+            r = self.session.get(url)
+            with open(imagepath, 'wb') as f:
+                f.write(r.content)
 
 def chunks(l, n):
     '''Yield successive n-sized chunks from l.'''
@@ -262,18 +280,29 @@ class SteamBadges(object):
 
             if fetch_images == True:
                 # Retrieve and store icon and logosmall
-                pool_size = multiprocessing.cpu_count() * 5
-                pool = multiprocessing.Pool(processes=pool_size)
-                pool_jobs = [(appinfo, self.image_path) for appinfo in appinfos]
-                pool_outputs = pool.map(fetch_images_worker, pool_jobs)
-                pool.close()
-                pool.join()
-            else:
-                # Just get names
-                pool_outputs = [(appinfo.get('appid'), appinfo.get('name')) for appinfo in appinfos]
+                tasks = multiprocessing.JoinableQueue()
+                num_consumers = multiprocessing.cpu_count() * 2
+
+                consumers = []
+                for i in range(num_consumers):
+                    c = FetchImages(tasks, self.image_path)
+                    c.start()
+                    consumers.append(c)
+
+                for appinfo in appinfos:
+                    tasks.put(appinfo)
+
+                # Add a poison pill for each consumer
+                for i in range(num_consumers):
+                    tasks.put(None)
+
+                # Wait for all of the tasks to finish
+                tasks.join()
 
             # Merge new data with data from shelve and store new values
-            for appid, name in pool_outputs:
+            for appinfo in appinfos:
+                appid = appinfo.get('appid')
+                name = appinfo.get('name')
                 apps[appid].name = name
                 # Store in shelve
                 data = {
