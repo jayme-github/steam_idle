@@ -278,13 +278,13 @@ class SteamBadges(object):
                 appinfos.extend(ainfo)
                 self.logger.debug('GetAppInfo returned data for %d appids:', len(ainfo))
 
-            if fetch_images == True:
+            if fetch_images is True:
                 # Retrieve and store icon and logosmall
                 tasks = multiprocessing.JoinableQueue()
                 num_consumers = multiprocessing.cpu_count() * 2
 
                 consumers = []
-                for i in range(num_consumers):
+                for _i in range(num_consumers):
                     c = FetchImages(tasks, self.image_path)
                     c.start()
                     consumers.append(c)
@@ -293,7 +293,7 @@ class SteamBadges(object):
                     tasks.put(appinfo)
 
                 # Add a poison pill for each consumer
-                for i in range(num_consumers):
+                for _i in range(num_consumers):
                     tasks.put(None)
 
                 # Wait for all of the tasks to finish
