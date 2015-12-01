@@ -73,7 +73,6 @@ def main_idle(apps):
     if args.verbose:
         print('Startin sequential idle of %d apps' % len(apps))
     new_apps = [] # new apps added douring idle
-    #or appid, remainingDrops, playTime in apps:
     for app in apps:
         p = IdleChild(app)
         p.start()
