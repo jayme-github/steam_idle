@@ -35,7 +35,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     _startup = True # True on app start, set to false then init is done (and steam is running).
     _statusBarTimer = None
     _statusBarTimerDelta = None
-    steamDataUpdated = pyqtSignal()
+    steamDataUpdated = pyqtSignal() # Emitted when tableView has been populated with fresh steam data
 
     def __init__(self, parent=None):
         """
@@ -82,88 +82,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # All slower init work is launched via singleShot timer so the UI is displayed immediately
             QTimer.singleShot(50, self.slowInit) # 100 msec seems delays slowInit for too long
             self.logger.debug('initDone signal sent')
-
-    def checkSteamRunning(self):
-        if steam_api.IsSteamRunning():
-            self.logger.debug('Steam client is running')
-            self.labelSteamNotRunning.hide()
-            # Skipp that stuff if idle is running
-            if len(self.activeApps) < 1:
-                self.toggle_actionStartStopIdle()
-                self.toggle_actionStartStopMultiIdle()
-
-                # Autostart
-                if self._init_done and self._startup:
-                    self._startup = False
-                    autostartMode = self.settings.value('autostart', 'None')
-                    self.logger.info('autostartMode: "%s"', autostartMode)
-                    if autostartMode == 'Multi-Idle':
-                        MIThreshold = self.settings.value('multiidlethreshold', 2, type=int)
-                        if self.gamesInRefundPeriod < MIThreshold:
-                            # Number of games in refund is below threshold, start normal idle
-                            self.logger.debug('Number of games in refund is below threshold, start normal idle')
-                            autostartMode = 'Idle'
-                        else:
-                            self.logger.debug('Autostart MultiIdle')
-                            self.on_actionStartStopMultiIdle_triggered()
-
-                    if autostartMode == 'Idle':
-                        self.logger.debug('Autostart Idle')
-                        self.on_actionStartStopIdle_triggered()
-
-        else:
-            self.logger.warning('Steam client is not running')
-            # Stop Idle processes
-            self.labelSteamNotRunning.show()
-            self.cleanUp()
-            self.actionStartStopIdle.setEnabled(False)
-            self.actionNext.setEnabled(False)
-            self.actionStartStopMultiIdle.setEnabled(False)
-
-        if not self._checkSteamRunningTimer:
-            self.logger.debug('Setting up timer')
-            self._checkSteamRunningTimer = QTimer()
-            self._checkSteamRunningTimer.timeout.connect(self.checkSteamRunning)
-            self._checkSteamRunningTimer.start(15*1000)
-
-    @property
-    def settings(self):
-        return QSettings(QSettings.IniFormat, QSettings.UserScope, 'jayme-github', 'SteamIdle')
-
-    @property
-    def steamPassword(self):
-        settings = self.settings
-        password = settings.value('steam/password', '')
-        if password != '':
-            return password
-
-        if self._steamPassword != None:
-            return self._steamPassword
-
-        raise Exception('No password')
-
-    @pyqtSlot()
-    def showSettings(self):
-        settingsDialog = SettingsDialog(parent=self)
-        if settingsDialog.exec_() == QDialog.Accepted:
-            self.logger.info('SettingsDialog accepted')
-            self.slowInit()
-        self.logger.info('SettingsDialog NOT accepted')
-
-    def readSettings(self):
-        settings = self.settings
-        self.logger.debug('Reading settings from "%s"',
-            QDir.toNativeSeparators(settings.fileName())
-        )
-        pos = settings.value('pos', QPoint(200, 200))
-        size = settings.value('size', QSize(650, 500))
-        self.resize(size)
-        self.move(pos)
-
-    def writeSettings(self):
-        settings = self.settings
-        settings.setValue("pos", self.pos())
-        settings.setValue("size", self.size())
 
     @pyqtSlot()
     def slowInit(self):
@@ -229,6 +147,90 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.on_actionRefresh_triggered()
 
         self._init_done = True
+
+    def checkSteamRunning(self):
+        if steam_api.IsSteamRunning():
+            if self.labelSteamNotRunning.isVisible():
+                self.logger.debug('Steam client is running')
+            self.labelSteamNotRunning.hide()
+            # Skipp that stuff if idle is running
+            if len(self.activeApps) < 1:
+                self.toggle_actionStartStopIdle()
+                self.toggle_actionStartStopMultiIdle()
+
+                # Autostart
+                if self._init_done and self._startup:
+                    self._startup = False
+                    autostartMode = self.settings.value('autostart', 'None')
+                    self.logger.info('autostartMode: "%s"', autostartMode)
+                    if autostartMode == 'Multi-Idle':
+                        MIThreshold = self.settings.value('multiidlethreshold', 2, type=int)
+                        if self.gamesInRefundPeriod < MIThreshold:
+                            # Number of games in refund is below threshold, start normal idle
+                            self.logger.debug('Number of games in refund is below threshold, start normal idle')
+                            autostartMode = 'Idle'
+                        else:
+                            self.logger.debug('Autostart MultiIdle')
+                            self.on_actionStartStopMultiIdle_triggered()
+
+                    if autostartMode == 'Idle':
+                        self.logger.debug('Autostart Idle')
+                        self.on_actionStartStopIdle_triggered()
+
+        else:
+            if not self.labelSteamNotRunning.isVisible():
+                self.logger.warning('Steam client is not running')
+            # Stop Idle processes
+            self.labelSteamNotRunning.show()
+            self.cleanUp()
+            self.actionStartStopIdle.setEnabled(False)
+            self.actionNext.setEnabled(False)
+            self.actionStartStopMultiIdle.setEnabled(False)
+
+        if not self._checkSteamRunningTimer:
+            self.logger.debug('Setting up timer')
+            self._checkSteamRunningTimer = QTimer()
+            self._checkSteamRunningTimer.timeout.connect(self.checkSteamRunning)
+            self._checkSteamRunningTimer.start(15*1000)
+
+    @property
+    def settings(self):
+        return QSettings(QSettings.IniFormat, QSettings.UserScope, 'jayme-github', 'SteamIdle')
+
+    @property
+    def steamPassword(self):
+        settings = self.settings
+        password = settings.value('steam/password', '')
+        if password != '':
+            return password
+
+        if self._steamPassword != None:
+            return self._steamPassword
+
+        raise Exception('No password')
+
+    @pyqtSlot()
+    def showSettings(self):
+        settingsDialog = SettingsDialog(parent=self)
+        if settingsDialog.exec_() == QDialog.Accepted:
+            self.logger.info('SettingsDialog accepted')
+            self.slowInit()
+        self.logger.info('SettingsDialog NOT accepted')
+
+    def readSettings(self):
+        settings = self.settings
+        self.logger.debug('Reading settings from "%s"',
+            QDir.toNativeSeparators(settings.fileName())
+        )
+        pos = settings.value('pos', QPoint(200, 200))
+        size = settings.value('size', QSize(650, 500))
+        self.resize(size)
+        self.move(pos)
+
+    def writeSettings(self):
+        settings = self.settings
+        settings.setValue("pos", self.pos())
+        settings.setValue("size", self.size())
 
     @pyqtSlot(str)
     def on_idleStatusUpdate(self, msg):
