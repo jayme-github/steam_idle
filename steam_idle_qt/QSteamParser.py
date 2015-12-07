@@ -3,12 +3,13 @@ from PyQt4.QtCore import pyqtSlot, pyqtSignal, QObject, QTimer, QSettings
 from steam_idle_qt.QSteamWebBrowser import QSteamWebBrowser
 from steam_idle.page_parser import SteamBadges
 
-DEFAULT_TIMER = 15*60*1000
+MAX_TIMER = 15*60*1000
 
 class QSteamParser(QObject):
     steamDataReady = pyqtSignal(dict)
     timerStart = pyqtSignal(int)
     timerStop = pyqtSignal()
+    timerTimeout = pyqtSignal(int)
     timer = None
 
     def __init__(self, username, password, data_path):
@@ -31,21 +32,21 @@ class QSteamParser(QObject):
 
     @pyqtSlot(int)
     def startTimer(self, interval):
-        # Interval should never exceed DEFAULT_TIMER
-        newInterval = DEFAULT_TIMER if interval > DEFAULT_TIMER else interval
-        self.logger.debug('Requested %fmin timer, setting up timer for %fmin',
-            interval/1000/60,
-            newInterval/1000/60,
+        # Interval should never exceed MAX_TIMER
+        newInterval = MAX_TIMER if interval > MAX_TIMER else interval
+        self.logger.debug('Requested %dmsec timer, setting up timer for %dmsec',
+            interval,
+            newInterval,
         )
         self.stopTimer()
         self.timer = QTimer()
-        self.timer.timeout.connect(self.updateApps)
+        self.timer.timeout.connect(self.on_timer_timeout)
         self.timer.start(newInterval)
         self.timerStart.emit(newInterval)
 
     @pyqtSlot()
     def startDefaultTimer(self):
-        self.startTimer(DEFAULT_TIMER)
+        self.startTimer(MAX_TIMER)
 
     @pyqtSlot()
     def stopTimer(self):
@@ -54,6 +55,12 @@ class QSteamParser(QObject):
             self.timer.stop()
             self.timer = None
             self.timerStop.emit()
+
+    @pyqtSlot()
+    def on_timer_timeout(self):
+        self.logger.debug(self.timer.interval())
+        self.timerTimeout.emit(self.timer.interval())
+        self.updateApps()
 
     @pyqtSlot()
     def updateApps(self):

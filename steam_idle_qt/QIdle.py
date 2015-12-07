@@ -150,7 +150,7 @@ class MultiIdle(BaseIdle):
             # No idle child running, ignore signal
             return
         self.logger.debug('on_steamDataReady with %d apps as parameter', len(apps))
-        for appid in self.idleChilds:
+        for appid in list(self.idleChilds):
             newapp = apps.get(appid)
             if newapp:
                 self.logger.debug('updated app: OLD: %s NEW: %s',

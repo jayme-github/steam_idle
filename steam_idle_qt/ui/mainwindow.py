@@ -103,6 +103,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._SteamParserInstance.steamDataReady.connect(self.updateSteamData)
         self._SteamParserInstance.timerStart.connect(self.on_SteamParser_startTimer)
         self._SteamParserInstance.timerStop.connect(self.on_SteamParser_stopTimer)
+        # Restart the statusbar timer with every timeout
+        self._SteamParserInstance.timerTimeout.connect(self.on_SteamParser_startTimer)
         self._SteamParserThread.start()
 
         # Create worker and thread for ideling
@@ -744,7 +746,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @pyqtSlot()
     def on_SteamParser_stopTimer(self):
-        self.logger.debug('Hide labelStatusBarTimer')
+        self.logger.debug('Stopping timer and hiding labelStatusBarTimer')
         self._statusBarTimer.stop()
         self._statusBarTimer = None
         self.labelStatusBarTimer.clear()
