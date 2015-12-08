@@ -84,7 +84,8 @@ class Idle(BaseIdle):
         self.logger.debug('on_steamDataReady with %d apps as parameter', len(apps))
         newapp = apps.get(self.app.appid)
         if newapp:
-            self.logger.debug('updated app: OLD: %s NEW: %s', self.app, newapp)
+            self.logger.debug('updated app: OLD: %s', self.app)
+            self.logger.debug('updated app: NEW: %s', newapp)
             self.app = newapp
             self._idle()
         else:
@@ -153,10 +154,8 @@ class MultiIdle(BaseIdle):
         for appid in list(self.idleChilds):
             newapp = apps.get(appid)
             if newapp:
-                self.logger.debug('updated app: OLD: %s NEW: %s',
-                    self.idleChilds[appid][0].app,
-                    newapp
-                )
+                self.logger.debug('updated app: OLD: %s', self.idleChilds[appid][0].app)
+                self.logger.debug('updated app: NEW: %s', newapp)
                 if newapp.playTime >= 2.0 or newapp.remainingDrops < 1:
                     self.logger.debug('%s has reached 2h playtime or has no drops remaining', newapp)
                     # Stop this child
