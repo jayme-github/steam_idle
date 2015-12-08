@@ -41,6 +41,7 @@ class SettingsDialog(QDialog, Ui_Dialog):
             self.comboBoxAutostart.findText(settings.value('autostart', 'None'))
         )
         self.spinBoxMultiIdleThreshold.setValue(settings.value('multiidlethreshold', 2, type=int))
+        self.spinBoxMaxRefreshTime.setValue(settings.value('maxrefreshtime', 15, type=int))
         # Check credentials if we know username and password
         self.checkSteamCredentials(lazy=True)
 
@@ -57,6 +58,7 @@ class SettingsDialog(QDialog, Ui_Dialog):
         settings.setValue('steam/storepassword', self.checkBoxStorePassword.isChecked())
         settings.setValue('autostart', self.comboBoxAutostart.currentText())
         settings.setValue('multiidlethreshold', self.spinBoxMultiIdleThreshold.value())
+        settings.setValue('maxrefreshtime', self.spinBoxMaxRefreshTime.value())
 
     def setGreenMsg(self, msg):
         self.labelStatus_2.setStyleSheet('color: green')
