@@ -13,11 +13,6 @@ from steam_idle import steam_api
 from steam_idle.page_parser import SteamBadges
 from steam_idle.idle import strfsec, IdleChild, calc_delay
 
-def r_sleep(sec):
-    ''' Sleep sec seconds and return seconds slept '''
-    sleep(sec)
-    return sec
-
 def main_idle(apps):
     # Just to make sure it's ordered
     apps = sorted(apps, key=lambda x: x.playTime, reverse=True)
@@ -84,6 +79,7 @@ def main_idle(apps):
                     strfsec(delay),
                     (datetime.now() + timedelta(seconds=delay)).strftime('%c')
             ))
+            sleep(delay)
 
             # Re check for remainingDrops and new apps
             for a in sbb.get_apps(fetch_images=False).values():
