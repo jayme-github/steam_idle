@@ -265,6 +265,9 @@ class SteamBadges(object):
 
         if appids_not_in_shelve:
             # GetAppInfo only returns info for 100 apps at once
+            # TODO: Call https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/ with access_token instead?
+            # params = {'access_token': self.swb.oauth_access_token, 'appids_filter': ','.join(appids_not_in_shelve), 'steamid': swb.steamid, 'format': 'json', 'include_appinfo': 1}
+
             appinfos = []
             self.logger.debug('Requesting %d appids from GetAppInfo:', len(appids_not_in_shelve))
             for appid_chunk in chunks(appids_not_in_shelve, 100):
