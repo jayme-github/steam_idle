@@ -1,2 +1,3 @@
 beautifulsoup4>=4.4.0
+setproctitle
 steamweb

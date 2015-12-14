@@ -1,6 +1,7 @@
 import sys
 import os
 import multiprocessing
+import setproctitle
 from datetime import timedelta
 from time import sleep
 from steam_idle import steam_api
@@ -18,6 +19,7 @@ class IdleChild(multiprocessing.Process):
         self.name += '-[%s]' % self.app.name if self.app.name else str(self.app.appid)
 
     def run(self):
+        setproctitle.setproctitle(self.name)
         os.environ['SteamAppId'] = str(self.app.appid)
         self.redirect_streams()
         try:
