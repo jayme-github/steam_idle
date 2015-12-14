@@ -167,6 +167,10 @@ class MultiIdle(BaseIdle):
                 self._stopChild(appid)
                 self.appDone.emit(newapp)
 
+        if len(self.idleChilds) == 0:
+            self.logger.info('All childs completed, emitting allDone signal')
+            self.allDone.emit()
+
     @pyqtSlot()
     def doStopIdle(self):
         self.logger.debug('doStopIdle called')
