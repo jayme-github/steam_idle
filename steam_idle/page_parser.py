@@ -74,6 +74,7 @@ class FetchImages(multiprocessing.Process):
     '''
     def __init__(self, task_queue, image_path):
         super(FetchImages, self).__init__()
+        self.logger = logging.getLogger('.'.join((__name__, self.__class__.__name__)))
         self.task_queue = task_queue
         self.image_path = image_path
         self.session = requests.Session()
@@ -102,6 +103,11 @@ class FetchImages(multiprocessing.Process):
                 url = 'https://steamcdn-a.akamaihd.net/steam/apps/%d/header_292x136.jpg' % appid
             else:
                 url = appinfo.get(imgtype+'url')
+            self.logger.debug('Processing %d: imgtype: %s, filename: "%s", path: "%s", url: "%s"',
+                                appid, imgtype, filename, imagepath, url)
+            if url is None:
+                self.logger.error('No URL found')
+                continue
 
             r = self.session.get(url)
             with open(imagepath, 'wb') as f:
