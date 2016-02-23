@@ -1,9 +1,17 @@
 #!/usr/bin/env python
 
+import sys
+if sys.version_info.major < 3: # Python 2
+    # Force API version to v2
+    import sip
+    API_NAMES = ['QDate', 'QDateTime', 'QString', 'QTextStream', 'QTime', 'QUrl', 'QVariant']
+    API_VERSION = 2
+    for name in API_NAMES:
+        sip.setapi(name, API_VERSION)
+
 from PyQt4 import QtGui
 from steam_idle_qt.ui.mainwindow import MainWindow
 import logging
-import sys
 LOGFMT = '%(asctime)s (%(name)s.%(funcName)s) [%(levelname)s] %(message)s'
 if hasattr(sys, 'frozen'):
     import os

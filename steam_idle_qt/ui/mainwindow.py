@@ -43,7 +43,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         @param parent reference to the parent widget (QWidget)
         """
-        super().__init__(parent)
+        super(MainWindow, self).__init__(parent)
         self.logger = logging.getLogger('.'.join((__name__, self.__class__.__name__)))
         self.logger.debug('Setting up UI')
         self.setupUi(self)

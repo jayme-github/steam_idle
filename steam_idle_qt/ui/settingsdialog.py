@@ -21,7 +21,7 @@ class SettingsDialog(QDialog, Ui_Dialog):
 
         @param parent reference to the parent widget (QWidget)
         """
-        super().__init__(parent)
+        super(SettingsDialog, self).__init__(parent)
         self.logger = logging.getLogger('.'.join((__name__, self.__class__.__name__)))
         self.setupUi(self)
         self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)

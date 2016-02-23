@@ -7,7 +7,7 @@ from .Ui_captcha import Ui_Dialog
 
 class CaptchaDialog(QDialog, Ui_Dialog):
     def __init__(self, image_data, parent=None):
-        super().__init__(parent)
+        super(CaptchaDialog, self).__init__(parent)
         self.setupUi(self)
         captchaImage = QImage.fromData(image_data, 'PNG')
         self.labelCaptchaImage.setPixmap(QPixmap.fromImage(captchaImage))
