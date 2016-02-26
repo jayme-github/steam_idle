@@ -1,0 +1,1 @@
+recursive-include steam_idle/libs *.so *.dll *.dylib
