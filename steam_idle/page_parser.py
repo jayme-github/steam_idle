@@ -31,9 +31,9 @@ class App(object):
     def __init__(self, image_path=''):
         self.image_path = image_path
     def __repr__(self):
-        return '<[%6d] "%s" (%d, %.1f)>' % (
+        return '<[{:6d}] "{}" ({}, {:.1f})>'.format(
             self.appid or 0,
-            self.name or 'Unknown app',
+            self.name.encode('ascii', 'ignore') or 'Unknown app',
             -1 if self.remainingDrops == None else self.remainingDrops,
             -1.0 if self.playTime == None else self.playTime,
         )
