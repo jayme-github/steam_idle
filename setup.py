@@ -8,7 +8,7 @@ def parse_requirements(path):
 
 setup(
     name = 'steam_idle',
-    version = '0.1',
+    version = '1.0',
     description = 'Idle Steam apps/games for card drops',
     long_description = open('README.rst', 'r').read(),
     platforms = ['any'],
@@ -18,7 +18,7 @@ setup(
     url = 'https://github.com/jayme-github/steam_idle',
     license = 'GNU Affero General Public License v3',
     classifiers = [
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
         'License :: OSI Approved :: GNU Affero General Public License v3',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
