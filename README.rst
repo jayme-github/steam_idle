@@ -41,7 +41,7 @@ Just run *steam_idle_cli.py* and follow the instructions:
 GUI (Qt) version
 ================
 
-For a (Qt 4) GUI version please see `steam_idle_gui <https://github.com/jayme-github/steam_idle_gui>`_.
+For a (Qt 4) GUI version please see `steam_idle_qt <https://github.com/jayme-github/steam_idle_qt>`_.
 
 License
 =======
