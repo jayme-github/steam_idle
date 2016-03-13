@@ -16,7 +16,7 @@ class IdleChild(multiprocessing.Process):
     def __init__(self, app):
         super(IdleChild, self).__init__()
         self.app = app
-        self.name += '-[%s]' % self.app.name if self.app.name else str(self.app.appid)
+        self.name += '-[%s]' % self.app.name.encode('utf-8') if self.app.name else str(self.app.appid)
 
     def run(self):
         setproctitle.setproctitle(self.name)
