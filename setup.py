@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import os
 from setuptools import setup
 
 def parse_requirements(path):
@@ -8,7 +8,7 @@ def parse_requirements(path):
 
 setup(
     name = 'steam_idle',
-    version = '1.0',
+    version = open(os.path.join('steam_idle', '__init__.py'), 'r').readline().split('\'')[1],
     description = 'Idle Steam apps/games for card drops',
     long_description = open('README.rst', 'r').read(),
     platforms = ['any'],
