@@ -60,7 +60,7 @@ def main_idle(apps):
             # Multi-Idled some apps, update values as they will have changed
             apps = [app for app in sbb.get_apps(fetch_images=False).values() if app.remainingDrops > 0]
             # If there are still apps with < 2.0h play time, restart
-            if [app for app in apps if app.playTime < 2.0] > 1:
+            if sum(app.playTime < 2.0 for app in apps) > 1:
                 print('There are still apps within refund time, restarting multi-idle')
                 return main_idle(apps)
 
